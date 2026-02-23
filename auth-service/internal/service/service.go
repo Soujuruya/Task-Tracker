@@ -1,8 +1,7 @@
 package service
 
 import (
-	"auth-service/internal/entity"
-	"auth-service/internal/repository"
+	"auth-service/internal/domain"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -10,9 +9,6 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 )
-
-// Дублирование ошибок, чтобы не тянуть зависимости
-var ErrUserAlreadyExists = errors.New("user already exists")
 
 type AuthService struct {
 	repo UserRepository
@@ -38,9 +34,9 @@ func (s *AuthService) Register(username, password string) (string, error) {
 	_, err := s.repo.GetByUsername(username)
 
 	if err == nil {
-		return "", ErrUserAlreadyExists
+		return "", domain.ErrUserAlreadyExists
 	}
-	if !errors.Is(err, repository.ErrUserNotFound) {
+	if !errors.Is(err, domain.ErrUserNotFound) {
 		return "", fmt.Errorf("failed to check existing user: %w", err)
 	}
 
@@ -53,7 +49,7 @@ func (s *AuthService) Register(username, password string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not generate ID: %w", err)
 	}
-	newUser := entity.User{
+	newUser := domain.User{
 		ID:           userID,
 		Username:     username,
 		PasswordHash: string(hash),
@@ -61,10 +57,10 @@ func (s *AuthService) Register(username, password string) (string, error) {
 
 	id, err := s.repo.Save(newUser)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserAlreadyExists) {
-			return "", ErrUserAlreadyExists
+		if errors.Is(err, domain.ErrUserAlreadyExists) {
+			return "", err
 		}
-		return "", err
+		return "", fmt.Errorf("failed to save user: %w", err)
 	}
 
 	return id, nil
@@ -74,11 +70,14 @@ func (s *AuthService) Register(username, password string) (string, error) {
 func (s *AuthService) Login(username, password string) (string, error) {
 	user, err := s.repo.GetByUsername(username)
 	if err != nil {
-		return "", err
+		if errors.Is(err, domain.ErrUserNotFound) {
+			return "", domain.ErrInvalidCredentials
+		}
+		return "", fmt.Errorf("failed to get user: %w", err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return "", fmt.Errorf("invalid password: %w", err)
+		return "", domain.ErrInvalidCredentials
 	}
 
 	return user.ID, nil

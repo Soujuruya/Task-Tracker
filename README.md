@@ -1,13 +1,13 @@
 # Task Tracker
 
 ## Запуск проекта
-Клонируем репозиторий и подключаем все зависимости.
-Переходим в директорию auth-service/cmd и после выполняем команду:
+- Клонируем репозиторий и подключаем все зависимости.
+- Решил добавить простой Makefile для запуска проекта.
+- Переходим в директорию auth-service и после выполняем команду:
 
 ```bash
-go run main.go
+make run
 ```
-Минимально рабочий вариант,так как конфигурация еще не добавлена.
 
 ## Основные моменты
 
@@ -18,9 +18,9 @@ go run main.go
 
 ```go
 type User struct {
-	ID           string `db:"id"`
-	Username     string `db:"username"`
-	PasswordHash string `db:"password_hash"`
+	ID           string 
+	Username     string 
+	PasswordHash string 
 }
 ```
 
@@ -63,14 +63,13 @@ map[string]entity.User
 #### Роутинг и запуск HTTP-сервера
 Решил вынести в отдельный файл,чтобы сильно не захламлять main.
 Здесь мы просто конфигурируем  наш сервер, регистрируем хенделеры.
+Реализовал технологию безопасного завершения работы сервера Graceful Shutdown.
 
 ### Обработка ошибок
-Решил пробрасывать ошибки выше с контекстом о ней, чтобы логика их обработки было понятнее,а чтобы
-не тянуть зависимости пришлось продублировать основные ошибки в каждом слое. Скорее всего это плохая практика,но для MVP посчитал нужным рискнуть,исходя из того,что по требованиям также было не захламлять директории и сделать максимально просто.
+Решил пробрасывать ошибки выше с контекстом о ней, чтобы логика их обработки была понятнее. Общие ошибки вынес в отдельный файл,чтобы каждый раз не тянуть их из слоя ниже. 
 
 ### Конфигурация
-Был вариант сделать конфигурационный файл и переменные окружения из него. Так было бы правильнее,но
-для минимально рабочей версии посчитал нужным временно вынести всё как переменные,которые я передаю в конфигурацию сервера для его запуска и в транспортный слой для работы с токенами.
+Реализовал чтение переменных окружения их env-файла. Вынес в отдельную фукнцию логику работу с ними. В дальнейшем планирую переходить на использование нормального конфига.
 
 ### Тестирование
 
@@ -79,39 +78,68 @@ map[string]entity.User
 Вот конфиг коллекции:
 ```json
 {
-	"info": {
-		"_postman_id": "bedad89a-d509-4bae-b866-1010c5b8df8e",
-		"name": "task-tracker",
-		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
-		"_exporter_id": "26085175"
-	},
-	"item": [
-		{
-			"name": "validate",
-			"request": {
-				"method": "GET",
-				"header": []
-			},
-			"response": []
-		},
-		{
-			"name": "login",
-			"request": {
-				"method": "POST",
-				"header": [],
-				"url": "http://localhost:8080/login"
-			},
-			"response": []
-		},
-		{
-			"name": "register",
-			"request": {
-				"method": "GET",
-				"header": []
-			},
-			"response": []
-		}
-	]
+  "info": {
+    "_postman_id": "bedad89a-d509-4bae-b866-1010c5b8df8e",
+    "name": "task-tracker",
+    "schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+    "_exporter_id": "26085175"
+  },
+  "item": [
+    {
+      "name": "login",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"user\",\n  \"password\": \"password123\"\n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "http://localhost:8080/login"
+      },
+      "response": []
+    },
+    {
+      "name": "register",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"username\": \"user\",\n    \"password\": \"password123\"\n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "http://localhost:8080/register"
+      },
+      "response": []
+    },
+    {
+      "name": "validate",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzE4Nzk0MjgsImlhdCI6MTc3MTg3NTgyOCwidXNlcl9pZCI6IjA0MGMyMGEzMDVkMTcwMDk1Zjk4ZTZiZTg5NDljNGQ2IiwidXNlcm5hbWUiOiJ1c2VyIn0.MBWCF7Kl35R44Dl4XuTqP9piL2BHSDsJhfk22G2XKF0\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "http://localhost:8080/validate"
+      },
+      "response": []
+    }
+  ]
 }
 ```
 

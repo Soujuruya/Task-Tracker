@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"auth-service/internal/domain"
 	"auth-service/internal/service"
 	"encoding/json"
 	"errors"
@@ -10,11 +11,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-)
-
-// Дублирование ошибок, чтобы не тянуть зависимости
-var (
-	ErrUserAlreadyExists = errors.New("user already exists")
 )
 
 type AuthHandler struct {
@@ -33,15 +29,20 @@ func NewAuthHandler(authService *service.AuthService, secretKey []byte, tokenTTL
 
 // ValidateToken Валидация токена (внутренний эндпоинт)
 func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var req ValidateTokenRequest
 
 	defer r.Body.Close()
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Handlers:ValidateToken:invalid request body: %v", err)
+		log.Printf("Handlers:ValidateToken: invalid request body: %v", err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Handlers:ValidateToken: token received: %s", req.Token)
+	log.Printf("Handlers:ValidateToken: token received")
 
 	var accessClaims struct {
 		UserID   string `json:"user_id"`
@@ -83,6 +84,11 @@ func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 
 // Register Регистрация пользователя
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var req RegisterRequest
 
 	defer r.Body.Close()
@@ -107,12 +113,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	userID, err := h.AuthService.Register(req.Username, req.Password)
 	if err != nil {
 		log.Printf("Handlers:Register: registration failed: %v", err)
-		if errors.Is(err, ErrUserAlreadyExists) {
+		if errors.Is(err, domain.ErrUserAlreadyExists) {
 			http.Error(w, "user already exists", http.StatusConflict)
 			return
 		}
-
-		http.Error(w, fmt.Sprintf("internal server error: %v", err), http.StatusInternalServerError)
+		log.Printf("Handlers:Register: internal error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -134,6 +140,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 // Login Аутентификация и получение токена
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var req LoginRequest
 
 	defer r.Body.Close()
@@ -143,7 +154,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Handlers:Login: registration attempt: username=%s", req.Username)
+	log.Printf("Handlers:Login: login attempt: username=%s", req.Username)
 
 	if req.Username == "" || req.Password == "" {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
@@ -153,8 +164,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	userID, err := h.AuthService.Login(req.Username, req.Password)
 
 	if err != nil {
+		if errors.Is(err, domain.ErrInvalidCredentials) {
+			http.Error(w, "invalid credentials", http.StatusUnauthorized)
+			return
+		}
 		log.Printf("Handlers:Login: login failed for username=%s: %v", req.Username, err)
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
