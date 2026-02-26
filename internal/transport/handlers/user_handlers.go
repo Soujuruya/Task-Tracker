@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"task-tracker-1/internal/domain"
 	"task-tracker-1/internal/service"
 	"task-tracker-1/internal/transport/dto"
@@ -30,19 +31,18 @@ func NewAuthHandler(authService *service.AuthService, secretKey []byte, tokenTTL
 
 // ValidateToken Валидация токена (внутренний эндпоинт)
 func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req dto.ValidateTokenRequest
-
-	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Handlers:ValidateToken: invalid request body: %v", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	tokenString := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+	if token == "" {
+		http.Error(w, "token required", http.StatusUnauthorized)
 		return
 	}
+
 	log.Printf("Handlers:ValidateToken: token received")
 
 	var accessClaims struct {
@@ -51,7 +51,7 @@ func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 		jwt.RegisteredClaims
 	}
 
-	_, err := jwt.ParseWithClaims(req.Token, &accessClaims, func(token *jwt.Token) (any, error) {
+	_, err := jwt.ParseWithClaims(token, &accessClaims, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}

@@ -8,7 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"task-tracker-1/internal/repository"
+	"task-tracker-1/internal/repository/user"
 	"task-tracker-1/internal/service"
 	"task-tracker-1/internal/transport"
 	"task-tracker-1/internal/transport/handlers"
@@ -52,7 +52,7 @@ func main() {
 	// Парсим переменные окружения,в дальнейшем можно вынести работу с конфигурацией из main.
 	cfg := loadConfig()
 
-	userRepo := repository.NewUserRepository()
+	userRepo := user.NewUserRepository()
 
 	authService := service.NewAuthService(userRepo)
 

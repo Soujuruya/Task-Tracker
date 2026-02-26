@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"task-tracker-1/internal/domain"
 	"task-tracker-1/internal/pkg"
-	"task-tracker-1/internal/repository"
+	"task-tracker-1/internal/repository/user"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService struct {
-	repo repository.UserRepo
+	repo user.UserRepo
 }
 
-func NewAuthService(repo repository.UserRepo) *AuthService {
+func NewAuthService(repo user.UserRepo) *AuthService {
 	return &AuthService{
 		repo: repo,
 	}

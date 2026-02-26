@@ -6,15 +6,15 @@ import (
 	"slices"
 	"task-tracker-1/internal/domain"
 	"task-tracker-1/internal/pkg"
-	"task-tracker-1/internal/repository"
+	"task-tracker-1/internal/repository/task"
 	"time"
 )
 
 type TaskService struct {
-	repo repository.TaskRepo
+	repo task.TaskRepo
 }
 
-func NewTaskService(repo repository.TaskRepo) *TaskService {
+func NewTaskService(repo task.TaskRepo) *TaskService {
 	return &TaskService{repo: repo}
 }
 
@@ -57,7 +57,7 @@ func (s *TaskService) GetListTasks(userID string) ([]*domain.Task, error) {
 	return tasks, nil
 }
 
-func (s *TaskService) UpdateTask(userID string, task *domain.Task) error {
+func (s *TaskService) UpdateTask(userID string, task *domain.UpdateTaskInput) error {
 	existingTask, err := s.repo.GetTaskByID(userID, task.ID)
 	if err != nil {
 		if errors.Is(err, domain.ErrTaskNotFound) {
@@ -66,24 +66,30 @@ func (s *TaskService) UpdateTask(userID string, task *domain.Task) error {
 		return fmt.Errorf("failed to get task: %w", err)
 	}
 
-	if task.Title == "" {
-		return domain.ErrEmptyTaskTitle
-	}
-	// Логика перехода статусов
-	switch task.ProgressStatus {
-	case domain.StatusDone:
-		existingTask.ProgressStatus = domain.StatusDone
-	case domain.StatusToDo, domain.StatusInProgress:
-		if existingTask.ProgressStatus == domain.StatusDone {
-			return fmt.Errorf("impossible to change status from Done: %w", domain.ErrTaskAlreadyDone)
+	if task.Title != nil {
+		if *task.Title == "" {
+			return domain.ErrEmptyTaskTitle
 		}
-		existingTask.ProgressStatus = task.ProgressStatus
-	default:
-		return domain.ErrInvalidTaskStatus
+		existingTask.Title = *task.Title
+	}
+	if task.Description != nil {
+		existingTask.Description = *task.Description
 	}
 
-	existingTask.Title = task.Title
-	existingTask.Description = task.Description
+	// Логика перехода статусов
+	if task.ProgressStatus != nil {
+		switch *task.ProgressStatus {
+		case domain.StatusDone:
+			existingTask.ProgressStatus = domain.StatusDone
+		case domain.StatusToDo, domain.StatusInProgress:
+			if existingTask.ProgressStatus == domain.StatusDone {
+				return fmt.Errorf("impossible to change status from Done: %w", domain.ErrTaskAlreadyDone)
+			}
+			existingTask.ProgressStatus = *task.ProgressStatus
+		default:
+			return domain.ErrInvalidTaskStatus
+		}
+	}
 
 	return s.repo.UpdateTask(userID, existingTask)
 }

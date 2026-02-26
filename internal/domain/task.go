@@ -17,3 +17,10 @@ type Task struct {
 	ProgressStatus ProgressStatus
 	CreatedAt      time.Time
 }
+
+type UpdateTaskInput struct {
+	ID             string
+	Title          *string
+	Description    *string
+	ProgressStatus *ProgressStatus
+}
