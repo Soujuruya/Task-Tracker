@@ -1,9 +1,6 @@
 package main
 
 import (
-	"auth-service/internal/repository"
-	"auth-service/internal/service"
-	"auth-service/internal/transport"
 	"context"
 	"errors"
 	"log"
@@ -11,6 +8,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"task-tracker-1/internal/repository"
+	"task-tracker-1/internal/service"
+	"task-tracker-1/internal/transport"
+	"task-tracker-1/internal/transport/handlers"
 	"time"
 )
 
@@ -55,7 +56,7 @@ func main() {
 
 	authService := service.NewAuthService(userRepo)
 
-	authHandler := transport.NewAuthHandler(authService, cfg.jwtSecret, cfg.tokenTTL)
+	authHandler := handlers.NewAuthHandler(authService, cfg.jwtSecret, cfg.tokenTTL)
 
 	server := transport.NewServer(authHandler, cfg.addr)
 

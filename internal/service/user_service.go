@@ -1,17 +1,18 @@
 package service
 
 import (
-	"auth-service/internal/domain"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"task-tracker-1/internal/domain"
+	"task-tracker-1/internal/repository"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService struct {
-	repo UserRepository
+	repo repository.UserRepo
 }
 
 // ID генерим здесь
@@ -23,7 +24,7 @@ func generateID() (string, error) {
 	return hex.EncodeToString(key), nil
 }
 
-func NewAuthService(repo UserRepository) *AuthService {
+func NewAuthService(repo repository.UserRepo) *AuthService {
 	return &AuthService{
 		repo: repo,
 	}

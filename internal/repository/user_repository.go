@@ -1,9 +1,9 @@
 package repository
 
 import (
-	"auth-service/internal/domain"
 	"fmt"
 	"sync"
+	"task-tracker-1/internal/domain"
 )
 
 type UserRepository struct {

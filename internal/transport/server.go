@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"net/http"
+	"task-tracker-1/internal/transport/handlers"
 	"time"
 )
 
@@ -10,7 +11,7 @@ type Server struct {
 	httpServer *http.Server
 }
 
-func NewServer(authHandler *AuthHandler, addr string) *Server {
+func NewServer(authHandler *handlers.AuthHandler, addr string) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/register", authHandler.Register)
 	mux.HandleFunc("/login", authHandler.Login)

@@ -1,13 +1,14 @@
-package transport
+package handlers
 
 import (
-	"auth-service/internal/domain"
-	"auth-service/internal/service"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"task-tracker-1/internal/domain"
+	"task-tracker-1/internal/service"
+	"task-tracker-1/internal/transport/dto"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -34,7 +35,7 @@ func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req ValidateTokenRequest
+	var req dto.ValidateTokenRequest
 
 	defer r.Body.Close()
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -68,7 +69,7 @@ func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := ValidateTokenResponse{
+	resp := dto.ValidateTokenResponse{
 		Valid:  true,
 		UserID: accessClaims.UserID,
 	}
@@ -89,7 +90,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req RegisterRequest
+	var req dto.RegisterRequest
 
 	defer r.Body.Close()
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -145,7 +146,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req LoginRequest
+	var req dto.LoginRequest
 
 	defer r.Body.Close()
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
