@@ -1,11 +1,10 @@
 package service
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"task-tracker-1/internal/domain"
+	"task-tracker-1/internal/pkg"
 	"task-tracker-1/internal/repository"
 
 	"golang.org/x/crypto/bcrypt"
@@ -13,15 +12,6 @@ import (
 
 type AuthService struct {
 	repo repository.UserRepo
-}
-
-// ID генерим здесь
-func generateID() (string, error) {
-	key := make([]byte, 16)
-	if _, err := rand.Read(key); err != nil {
-		return "", fmt.Errorf("failed to generate ID: %w", err)
-	}
-	return hex.EncodeToString(key), nil
 }
 
 func NewAuthService(repo repository.UserRepo) *AuthService {
@@ -46,7 +36,7 @@ func (s *AuthService) Register(username, password string) (string, error) {
 		return "", fmt.Errorf("could not hash password: %w", err)
 	}
 
-	userID, err := generateID()
+	userID, err := pkg.GenerateID()
 	if err != nil {
 		return "", fmt.Errorf("could not generate ID: %w", err)
 	}
