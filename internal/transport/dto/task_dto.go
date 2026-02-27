@@ -16,7 +16,7 @@ type CreateTaskRequest struct {
 
 type CreateTaskResponse = TaskResponse
 
-type GetTasksResponse struct {
+type GetListTasksResponse struct {
 	Tasks []TaskResponse `json:"tasks,omitempty"`
 }
 

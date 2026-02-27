@@ -25,6 +25,12 @@ func (s *TaskService) CreateTask(userID string, task *domain.Task) (string, erro
 
 	if task.ProgressStatus == "" {
 		task.ProgressStatus = domain.StatusToDo
+	} else {
+		switch task.ProgressStatus {
+		case domain.StatusToDo, domain.StatusInProgress, domain.StatusDone:
+		default:
+			return "", domain.ErrInvalidTaskStatus
+		}
 	}
 
 	taskID, err := pkg.GenerateID()
@@ -57,18 +63,18 @@ func (s *TaskService) GetListTasks(userID string) ([]*domain.Task, error) {
 	return tasks, nil
 }
 
-func (s *TaskService) UpdateTask(userID string, task *domain.UpdateTaskInput) error {
+func (s *TaskService) UpdateTask(userID string, task *domain.UpdateTaskInput) (*domain.Task, error) {
 	existingTask, err := s.repo.GetTaskByID(userID, task.ID)
 	if err != nil {
 		if errors.Is(err, domain.ErrTaskNotFound) {
-			return err
+			return nil, err
 		}
-		return fmt.Errorf("failed to get task: %w", err)
+		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
 	if task.Title != nil {
 		if *task.Title == "" {
-			return domain.ErrEmptyTaskTitle
+			return nil, domain.ErrEmptyTaskTitle
 		}
 		existingTask.Title = *task.Title
 	}
@@ -83,15 +89,19 @@ func (s *TaskService) UpdateTask(userID string, task *domain.UpdateTaskInput) er
 			existingTask.ProgressStatus = domain.StatusDone
 		case domain.StatusToDo, domain.StatusInProgress:
 			if existingTask.ProgressStatus == domain.StatusDone {
-				return fmt.Errorf("impossible to change status from Done: %w", domain.ErrTaskAlreadyDone)
+				return nil, fmt.Errorf("impossible to change status from Done: %w", domain.ErrTaskAlreadyDone)
 			}
 			existingTask.ProgressStatus = *task.ProgressStatus
 		default:
-			return domain.ErrInvalidTaskStatus
+			return nil, domain.ErrInvalidTaskStatus
 		}
 	}
 
-	return s.repo.UpdateTask(userID, existingTask)
+	updatedTask, err := s.repo.UpdateTask(userID, existingTask)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update task: %w", err)
+	}
+	return updatedTask, nil
 }
 
 func (s *TaskService) DeleteTask(userID, taskID string) error {

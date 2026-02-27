@@ -86,58 +86,197 @@ map[string]entity.User
   },
   "item": [
     {
-      "name": "login",
-      "request": {
-        "method": "POST",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"username\": \"user\",\n  \"password\": \"password123\"\n}\n",
-          "options": {
-            "raw": {
-              "language": "json"
+      "name": "Auth",
+      "item": [
+        {
+          "name": "login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const resp = pm.response.json();",
+                  "pm.environment.set(\"access_token\", resp.access_token);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
             }
-          }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"test user\",\n  \"password\": \"password123\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "http://localhost:8080/login"
+          },
+          "response": []
         },
-        "url": "http://localhost:8080/login"
-      },
-      "response": []
+        {
+          "name": "register",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"test user\",\n    \"password\": \"password123\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "http://localhost:8080/register"
+          },
+          "response": []
+        },
+        {
+          "name": "validate",
+          "request": {
+            "auth": {
+              "type": "jwt",
+              "jwt": {
+                "algorithm": "HS256",
+                "isSecretBase64Encoded": false,
+                "payload": "{}",
+                "addTokenTo": "header",
+                "headerPrefix": "Bearer",
+                "queryParamKey": "token",
+                "header": "{}"
+              }
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/validate?=",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "validate"
+              ],
+              "query": [
+                {
+                  "key": "",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
     },
     {
-      "name": "register",
-      "request": {
-        "method": "POST",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n    \"username\": \"user\",\n    \"password\": \"password123\"\n}\n",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "createTask",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"test title\",\n    \"description\": \"blablabla\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "http://localhost:8080/tasks"
+          },
+          "response": []
         },
-        "url": "http://localhost:8080/register"
-      },
-      "response": []
-    },
-    {
-      "name": "validate",
-      "request": {
-        "method": "POST",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzE4Nzk0MjgsImlhdCI6MTc3MTg3NTgyOCwidXNlcl9pZCI6IjA0MGMyMGEzMDVkMTcwMDk1Zjk4ZTZiZTg5NDljNGQ2IiwidXNlcm5hbWUiOiJ1c2VyIn0.MBWCF7Kl35R44Dl4XuTqP9piL2BHSDsJhfk22G2XKF0\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
+        {
+          "name": "getListTasks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "http://localhost:8080/tasks"
+          },
+          "response": []
         },
-        "url": "http://localhost:8080/validate"
-      },
-      "response": []
+        {
+          "name": "updateTask",
+          "request": {
+            "auth": {
+              "type": "jwt",
+              "jwt": {
+                "algorithm": "HS256",
+                "isSecretBase64Encoded": false,
+                "payload": "{}",
+                "addTokenTo": "header",
+                "headerPrefix": "Bearer",
+                "queryParamKey": "token",
+                "header": "{}"
+              }
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"new title\",\n    \"description\": \"new blablabla\",\n    \"progress_status\": \"in_progress\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "http://localhost:8080/tasks/4a12a324ee63808357f4304155d91952"
+          },
+          "response": []
+        },
+        {
+          "name": "deleteTask",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "http://localhost:8080/tasks/4a12a324ee63808357f4304155d91952"
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

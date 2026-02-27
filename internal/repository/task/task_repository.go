@@ -54,16 +54,17 @@ func (r *TaskRepository) GetListTasks(userID string) ([]*domain.Task, error) {
 	return tasksSlice, nil
 }
 
-func (r *TaskRepository) UpdateTask(userID string, task *domain.Task) error {
+func (r *TaskRepository) UpdateTask(userID string, task *domain.Task) (*domain.Task, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if _, ok := r.db[userID][task.ID]; !ok {
-		return fmt.Errorf("task with id %s not found: %w", task.ID, domain.ErrTaskNotFound)
+		return nil, fmt.Errorf("task with id %s not found: %w", task.ID, domain.ErrTaskNotFound)
 	}
 
 	r.db[userID][task.ID] = task
-	return nil
+
+	return r.db[userID][task.ID], nil
 }
 
 func (r *TaskRepository) DeleteTask(userID string, taskID string) error {

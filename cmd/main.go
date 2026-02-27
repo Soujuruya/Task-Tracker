@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"log"
+	"log/slog"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
+	"task-tracker-1/internal/config"
+	loclog "task-tracker-1/internal/pkg/logger"
+	"task-tracker-1/internal/repository/task"
 	"task-tracker-1/internal/repository/user"
 	"task-tracker-1/internal/service"
 	"task-tracker-1/internal/transport"
@@ -15,57 +18,29 @@ import (
 	"time"
 )
 
-type config struct {
-	addr      string
-	jwtSecret []byte
-	tokenTTL  time.Duration
-}
-
-func loadConfig() config {
-	addr := os.Getenv("AUTH_SERVICE_ADDR")
-	if addr == "" {
-		log.Fatal("AUTH_SERVICE_ADDR is required")
-	}
-
-	secretKey := []byte(os.Getenv("JWT_SECRET"))
-	if len(secretKey) == 0 {
-		log.Fatal("JWT_SECRET is required")
-	}
-
-	tokenTTLStr := os.Getenv("TOKEN_TTL")
-	if tokenTTLStr == "" {
-		log.Fatal("TOKEN_TTL is required")
-	}
-
-	tokenTTL, err := time.ParseDuration(tokenTTLStr)
-	if err != nil {
-		log.Fatal("TOKEN_TTL is invalid")
-	}
-	return config{
-		addr:      addr,
-		jwtSecret: secretKey,
-		tokenTTL:  tokenTTL,
-	}
-}
 func main() {
+	logger := loclog.Init()
+	slog.SetDefault(logger)
 
-	// Парсим переменные окружения,в дальнейшем можно вынести работу с конфигурацией из main.
-	cfg := loadConfig()
+	// Парсим переменные окружения из .env
+	cfg := config.LoadConfig()
 
 	userRepo := user.NewUserRepository()
-
 	authService := service.NewAuthService(userRepo)
+	authHandler := handlers.NewAuthHandler(authService, cfg.JwtSecret, cfg.TokenTTL)
 
-	authHandler := handlers.NewAuthHandler(authService, cfg.jwtSecret, cfg.tokenTTL)
+	taskRepo := task.NewTaskRepository()
+	taskService := service.NewTaskService(taskRepo)
+	taskHandler := handlers.NewTaskHandler(taskService)
 
-	server := transport.NewServer(authHandler, cfg.addr)
+	server := transport.NewServer(authHandler, taskHandler, cfg.Addr)
 
 	// Ловим сигналы SIGINT/SIGTERM
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	go func() {
-		log.Printf("starting server at %s", cfg.addr)
+		log.Printf("starting server at %s", cfg.Addr)
 		if err := server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) { // игнорируем ErrServerClosed ошибку для чистого завершения
 			log.Fatal("failed to start server:", err)
 		}

@@ -1,4 +1,4 @@
-package transport
+package middleware
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 type contextKey string
 
 const UserIDKey contextKey = "userID"
+
+var httpClient = &http.Client{}
 
 func ValidateTokenMiddleware(authServiceURl string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -29,8 +31,7 @@ func ValidateTokenMiddleware(authServiceURl string) func(http.Handler) http.Hand
 			}
 			req.Header.Set("Authorization", "Bearer "+token)
 
-			client := &http.Client{}
-			resp, err := client.Do(req)
+			resp, err := httpClient.Do(req)
 			if err != nil {
 				http.Error(w, "auth service unavailable", http.StatusInternalServerError)
 				return
@@ -48,6 +49,12 @@ func ValidateTokenMiddleware(authServiceURl string) func(http.Handler) http.Hand
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
+
+			if validateResponse.UserID == "" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
 			ctx := context.WithValue(r.Context(), UserIDKey, validateResponse.UserID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
