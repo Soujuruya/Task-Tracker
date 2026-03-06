@@ -168,14 +168,14 @@ func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "task not found", http.StatusNotFound)
 			return
 		}
-		if errors.Is(err, domain.ErrTaskAlreadyDone) {
-			slog.Error("TaskService.Handlers.UpdateTask", "error", err)
-			http.Error(w, "task is already done", http.StatusConflict)
-			return
-		}
 		if errors.Is(err, domain.ErrInvalidTaskStatus) {
 			slog.Error("TaskService.Handlers.UpdateTask", "error", err)
 			http.Error(w, "invalid task status", http.StatusBadRequest)
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidTransition) {
+			slog.Error("TaskService.Handlers.UpdateTask", "error", err)
+			http.Error(w, "invalid task transition", http.StatusConflict)
 			return
 		}
 		slog.Error("TaskService.Handlers.UpdateTask: internal server error", "error", err)

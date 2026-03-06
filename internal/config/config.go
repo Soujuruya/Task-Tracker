@@ -7,15 +7,21 @@ import (
 )
 
 type Config struct {
-	Addr      string
-	JwtSecret []byte
-	TokenTTL  time.Duration
+	Addr            string
+	AuthServiceHost string
+	JwtSecret       []byte
+	TokenTTL        time.Duration
 }
 
 func LoadConfig() Config {
 	addr := os.Getenv("AUTH_SERVICE_ADDR")
 	if addr == "" {
 		log.Fatal("AUTH_SERVICE_ADDR is required")
+	}
+
+	authServiceHost := os.Getenv("AUTH_SERVICE_HOST")
+	if authServiceHost == "" {
+		log.Fatal("AUTH_SERVICE_HOST is required")
 	}
 
 	secretKey := []byte(os.Getenv("JWT_SECRET"))
@@ -33,8 +39,9 @@ func LoadConfig() Config {
 		log.Fatal("TOKEN_TTL is invalid")
 	}
 	return Config{
-		Addr:      addr,
-		JwtSecret: secretKey,
-		TokenTTL:  tokenTTL,
+		Addr:            addr,
+		AuthServiceHost: authServiceHost,
+		JwtSecret:       secretKey,
+		TokenTTL:        tokenTTL,
 	}
 }

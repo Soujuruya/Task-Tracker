@@ -33,7 +33,7 @@ func main() {
 	taskService := service.NewTaskService(taskRepo)
 	taskHandler := handlers.NewTaskHandler(taskService)
 
-	server := transport.NewServer(authHandler, taskHandler, cfg.Addr)
+	server := transport.NewServer(authHandler, taskHandler, cfg.Addr, cfg.AuthServiceHost)
 
 	// Ловим сигналы SIGINT/SIGTERM
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

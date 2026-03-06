@@ -12,7 +12,7 @@ type Server struct {
 	httpServer *http.Server
 }
 
-func NewServer(authHandler *handlers.AuthHandler, taskHandler *handlers.TaskHandler, addr string) *Server {
+func NewServer(authHandler *handlers.AuthHandler, taskHandler *handlers.TaskHandler, addr, authServiceHost string) *Server {
 	mux := http.NewServeMux()
 	//Auth-service
 	mux.HandleFunc("POST /register", authHandler.Register)
@@ -26,8 +26,7 @@ func NewServer(authHandler *handlers.AuthHandler, taskHandler *handlers.TaskHand
 	taskMux.HandleFunc("DELETE /tasks/{id}", taskHandler.DeleteTask)
 
 	//Auth-Middleware
-	authServiceURL := "http://" + addr
-	taskMiddleware := middleware.ValidateTokenMiddleware(authServiceURL)
+	taskMiddleware := middleware.ValidateTokenMiddleware(authServiceHost)
 	mux.Handle("/tasks", taskMiddleware(taskMux))
 	mux.Handle("/tasks/", taskMiddleware(taskMux))
 

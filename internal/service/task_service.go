@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"task-tracker-1/internal/domain"
@@ -25,12 +24,10 @@ func (s *TaskService) CreateTask(userID string, task *domain.Task) (string, erro
 
 	if task.ProgressStatus == "" {
 		task.ProgressStatus = domain.StatusToDo
-	} else {
-		switch task.ProgressStatus {
-		case domain.StatusToDo, domain.StatusInProgress, domain.StatusDone:
-		default:
-			return "", domain.ErrInvalidTaskStatus
-		}
+	}
+
+	if !domain.IsValidStatus(task.ProgressStatus) {
+		return "", domain.ErrInvalidTaskStatus
 	}
 
 	taskID, err := pkg.GenerateID()
@@ -39,11 +36,11 @@ func (s *TaskService) CreateTask(userID string, task *domain.Task) (string, erro
 	}
 
 	task.ID = taskID
-	task.CreatedAt = time.Now()
+	task.CreatedAt = time.Now().UTC()
 
 	_, err = s.repo.CreateTask(userID, task)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create task: %w", err)
 	}
 
 	return task.ID, nil
@@ -52,7 +49,7 @@ func (s *TaskService) CreateTask(userID string, task *domain.Task) (string, erro
 func (s *TaskService) GetListTasks(userID string) ([]*domain.Task, error) {
 	tasks, err := s.repo.GetListTasks(userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
 	//Сортируем таски по времени создании для того чтобы пользователь видел сначала более новые таски,думаю так логичнее
@@ -66,9 +63,6 @@ func (s *TaskService) GetListTasks(userID string) ([]*domain.Task, error) {
 func (s *TaskService) UpdateTask(userID string, task *domain.UpdateTaskInput) (*domain.Task, error) {
 	existingTask, err := s.repo.GetTaskByID(userID, task.ID)
 	if err != nil {
-		if errors.Is(err, domain.ErrTaskNotFound) {
-			return nil, err
-		}
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
@@ -82,19 +76,12 @@ func (s *TaskService) UpdateTask(userID string, task *domain.UpdateTaskInput) (*
 		existingTask.Description = *task.Description
 	}
 
-	// Логика перехода статусов
+	// Переход статуса
 	if task.ProgressStatus != nil {
-		switch *task.ProgressStatus {
-		case domain.StatusDone:
-			existingTask.ProgressStatus = domain.StatusDone
-		case domain.StatusToDo, domain.StatusInProgress:
-			if existingTask.ProgressStatus == domain.StatusDone {
-				return nil, fmt.Errorf("impossible to change status from Done: %w", domain.ErrTaskAlreadyDone)
-			}
-			existingTask.ProgressStatus = *task.ProgressStatus
-		default:
-			return nil, domain.ErrInvalidTaskStatus
+		if !domain.TryTransition(existingTask.ProgressStatus, *task.ProgressStatus) {
+			return nil, domain.ErrInvalidTransition
 		}
+		existingTask.ProgressStatus = *task.ProgressStatus
 	}
 
 	updatedTask, err := s.repo.UpdateTask(userID, existingTask)
@@ -107,13 +94,10 @@ func (s *TaskService) UpdateTask(userID string, task *domain.UpdateTaskInput) (*
 func (s *TaskService) DeleteTask(userID, taskID string) error {
 	existingTask, err := s.repo.GetTaskByID(userID, taskID)
 	if err != nil {
-		if errors.Is(err, domain.ErrTaskNotFound) {
-			return err
-		}
 		return fmt.Errorf("failed to get task: %w", err)
 	}
 	if existingTask.ProgressStatus == domain.StatusDone {
-		return fmt.Errorf("impossible to delete task: %w", domain.ErrTaskAlreadyDone)
+		return domain.ErrTaskAlreadyDone
 	}
 
 	if err = s.repo.DeleteTask(userID, taskID); err != nil {

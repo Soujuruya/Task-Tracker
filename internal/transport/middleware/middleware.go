@@ -6,17 +6,19 @@ import (
 	"net/http"
 	"strings"
 	"task-tracker-1/internal/transport/dto"
+	"time"
 )
 
 type contextKey string
 
 const UserIDKey contextKey = "userID"
 
-var httpClient = &http.Client{}
+var httpClient = &http.Client{Timeout: 3 * time.Second}
 
 func ValidateTokenMiddleware(authServiceURl string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
 			tokenString := r.Header.Get("Authorization")
 			token := strings.TrimPrefix(tokenString, "Bearer ")
 			if token == "" {
@@ -24,7 +26,7 @@ func ValidateTokenMiddleware(authServiceURl string) func(http.Handler) http.Hand
 				return
 			}
 
-			req, err := http.NewRequest(http.MethodGet, authServiceURl+"/validate", nil)
+			req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, authServiceURl+"/validate", nil)
 			if err != nil {
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return

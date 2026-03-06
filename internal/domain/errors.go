@@ -13,4 +13,5 @@ var (
 	ErrEmptyTaskTitle    = errors.New("empty task title")
 	ErrTaskAlreadyDone   = errors.New("task already done")
 	ErrInvalidTaskStatus = errors.New("invalid task status")
+	ErrInvalidTransition = errors.New("invalid status transition")
 )
