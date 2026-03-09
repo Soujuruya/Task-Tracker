@@ -1,7 +1,6 @@
 package user
 
 import (
-	"fmt"
 	"sync"
 	"task-tracker-1/internal/domain"
 )
@@ -25,11 +24,11 @@ func (r *UserRepository) Save(user domain.User) (string, error) {
 	defer r.mu.Unlock()
 
 	if _, exists := r.db[user.ID]; exists {
-		return "", fmt.Errorf("user with id %v already exists: %w", user.ID, domain.ErrUserAlreadyExists)
+		return "", domain.ErrUserAlreadyExists
 	}
 	//Вторичный индекс для быстрого поиска
 	if _, exists := r.usernameIdx[user.Username]; exists {
-		return "", fmt.Errorf("user with username %v already exists: %w", user.Username, domain.ErrUserAlreadyExists)
+		return "", domain.ErrUserAlreadyExists
 	}
 	r.db[user.ID] = user
 	r.usernameIdx[user.Username] = user.ID
@@ -44,7 +43,7 @@ func (r *UserRepository) GetByUsername(username string) (domain.User, error) {
 	// Поиск работает теперь по вторичному индексу O(1)
 	userID, ok := r.usernameIdx[username]
 	if !ok {
-		return domain.User{}, fmt.Errorf("user with username %v does not exist: %w", username, domain.ErrUserNotFound)
+		return domain.User{}, domain.ErrUserNotFound
 	}
 
 	return r.db[userID], nil
