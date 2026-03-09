@@ -1,7 +1,6 @@
 package task
 
 import (
-	"fmt"
 	"sync"
 	"task-tracker-1/internal/domain"
 )
@@ -35,7 +34,7 @@ func (r *TaskRepository) GetTaskByID(userID, taskID string) (*domain.Task, error
 
 	task, ok := r.db[userID][taskID]
 	if !ok {
-		return nil, fmt.Errorf("task with id %s not found: %w", taskID, domain.ErrTaskNotFound)
+		return nil, domain.ErrTaskNotFound
 	}
 
 	return task, nil
@@ -67,7 +66,7 @@ func (r *TaskRepository) UpdateTask(userID string, task *domain.Task) (*domain.T
 	}
 
 	if _, ok := r.db[userID][task.ID]; !ok {
-		return nil, fmt.Errorf("task with id %s not found: %w", task.ID, domain.ErrTaskNotFound)
+		return nil, domain.ErrTaskNotFound
 	}
 
 	r.db[userID][task.ID] = task
@@ -84,7 +83,7 @@ func (r *TaskRepository) DeleteTask(userID string, taskID string) error {
 	}
 
 	if _, ok := r.db[userID][taskID]; !ok {
-		return fmt.Errorf("task with id %s not found: %w", taskID, domain.ErrTaskNotFound)
+		return domain.ErrTaskNotFound
 	}
 
 	delete(r.db[userID], taskID)
