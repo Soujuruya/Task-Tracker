@@ -1,8 +1,11 @@
 package service
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
+	"strings"
 	"task-tracker-1/internal/domain"
 	"task-tracker-1/internal/pkg"
 	"task-tracker-1/internal/repository/task"
@@ -49,11 +52,18 @@ func (s *TaskService) CreateTask(userID string, task *domain.Task) (string, erro
 func (s *TaskService) GetListTasks(userID string) ([]*domain.Task, error) {
 	tasks, err := s.repo.GetListTasks(userID)
 	if err != nil {
+		if errors.Is(err, domain.ErrUserNotFound) {
+			return []*domain.Task{}, nil
+		}
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
-	//Сортируем таски по времени создании для того чтобы пользователь видел сначала более новые таски,думаю так логичнее
+	//Сортируем таски по времени создании для того чтобы пользователь видел сначала более новые таски
+	//Если даты создания идентичны, то сортируем по второму критерию - ID таски.
 	slices.SortFunc(tasks, func(i, j *domain.Task) int {
+		if i.CreatedAt.Equal(j.CreatedAt) {
+			return strings.Compare(i.ID, j.ID)
+		}
 		return j.CreatedAt.Compare(i.CreatedAt)
 	})
 
@@ -81,6 +91,7 @@ func (s *TaskService) UpdateTask(userID string, task *domain.UpdateTaskInput) (*
 		if !domain.TryTransition(existingTask.ProgressStatus, *task.ProgressStatus) {
 			return nil, domain.ErrInvalidTransition
 		}
+		slog.Info("task status transition", "userID", userID, "taskID", task.ID, "from", existingTask.ProgressStatus, "to", *task.ProgressStatus)
 		existingTask.ProgressStatus = *task.ProgressStatus
 	}
 

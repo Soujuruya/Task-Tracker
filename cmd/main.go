@@ -24,6 +24,7 @@ func main() {
 
 	// Парсим переменные окружения из .env
 	cfg := config.LoadConfig()
+	slog.Info("Loading config...", "ENVIRONMENT", cfg.ENV)
 
 	userRepo := user.NewUserRepository()
 	authService := service.NewAuthService(userRepo)

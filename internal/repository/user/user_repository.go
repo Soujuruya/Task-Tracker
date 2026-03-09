@@ -7,13 +7,15 @@ import (
 )
 
 type UserRepository struct {
-	mu sync.RWMutex
-	db map[string]domain.User
+	mu          sync.RWMutex
+	db          map[string]domain.User
+	usernameIdx map[string]string
 }
 
 func NewUserRepository() *UserRepository {
 	return &UserRepository{
-		db: map[string]domain.User{},
+		db:          map[string]domain.User{},
+		usernameIdx: map[string]string{},
 	}
 }
 
@@ -21,10 +23,16 @@ func NewUserRepository() *UserRepository {
 func (r *UserRepository) Save(user domain.User) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	if _, exists := r.db[user.ID]; exists {
-		return user.ID, fmt.Errorf("user with id %v already exists: %w", user.ID, domain.ErrUserAlreadyExists)
+		return "", fmt.Errorf("user with id %v already exists: %w", user.ID, domain.ErrUserAlreadyExists)
+	}
+	//Вторичный индекс для быстрого поиска
+	if _, exists := r.usernameIdx[user.Username]; exists {
+		return "", fmt.Errorf("user with username %v already exists: %w", user.Username, domain.ErrUserAlreadyExists)
 	}
 	r.db[user.ID] = user
+	r.usernameIdx[user.Username] = user.ID
 	return user.ID, nil
 }
 
@@ -33,13 +41,11 @@ func (r *UserRepository) GetByUsername(username string) (domain.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	// Перебор циклом использовал, как более простой рабочий вариант
-	for _, user := range r.db {
-		if user.Username == username {
-			return user, nil
-		}
+	// Поиск работает теперь по вторичному индексу O(1)
+	userID, ok := r.usernameIdx[username]
+	if !ok {
+		return domain.User{}, fmt.Errorf("user with username %v does not exist: %w", username, domain.ErrUserNotFound)
 	}
-	return domain.User{}, fmt.Errorf("user with username %v not found: %w", username, domain.ErrUserNotFound)
-}
 
-// Другие методы не реализованы,т.к. пока нет необходимости их использования
+	return r.db[userID], nil
+}

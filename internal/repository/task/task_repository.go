@@ -45,6 +45,10 @@ func (r *TaskRepository) GetListTasks(userID string) ([]*domain.Task, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	if _, ok := r.db[userID]; !ok {
+		return nil, domain.ErrUserNotFound
+	}
+
 	tasks := r.db[userID]
 
 	tasksSlice := make([]*domain.Task, 0, len(tasks))
@@ -58,6 +62,10 @@ func (r *TaskRepository) UpdateTask(userID string, task *domain.Task) (*domain.T
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	if _, ok := r.db[userID]; !ok {
+		return nil, domain.ErrUserNotFound
+	}
+
 	if _, ok := r.db[userID][task.ID]; !ok {
 		return nil, fmt.Errorf("task with id %s not found: %w", task.ID, domain.ErrTaskNotFound)
 	}
@@ -70,6 +78,10 @@ func (r *TaskRepository) UpdateTask(userID string, task *domain.Task) (*domain.T
 func (r *TaskRepository) DeleteTask(userID string, taskID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	if _, ok := r.db[userID]; !ok {
+		return domain.ErrUserNotFound
+	}
 
 	if _, ok := r.db[userID][taskID]; !ok {
 		return fmt.Errorf("task with id %s not found: %w", taskID, domain.ErrTaskNotFound)

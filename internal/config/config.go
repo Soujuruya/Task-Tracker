@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	ENV             string
 	Addr            string
 	AuthServiceHost string
 	JwtSecret       []byte
@@ -14,24 +15,39 @@ type Config struct {
 }
 
 func LoadConfig() Config {
+	env := os.Getenv("ENVIRONMENT")
+	isDev := env == "development"
+
 	addr := os.Getenv("AUTH_SERVICE_ADDR")
 	if addr == "" {
-		log.Fatal("AUTH_SERVICE_ADDR is required")
+		if !isDev {
+			log.Fatal("AUTH_SERVICE_ADDR is required")
+		}
+		addr = ":8080"
 	}
 
 	authServiceHost := os.Getenv("AUTH_SERVICE_HOST")
 	if authServiceHost == "" {
-		log.Fatal("AUTH_SERVICE_HOST is required")
+		if !isDev {
+			log.Fatal("AUTH_SERVICE_HOST is required")
+		}
+		authServiceHost = "http://localhost:8080"
 	}
 
 	secretKey := []byte(os.Getenv("JWT_SECRET"))
 	if len(secretKey) == 0 {
-		log.Fatal("JWT_SECRET is required")
+		if !isDev {
+			log.Fatal("JWT_SECRET is required")
+		}
+		secretKey = []byte("secret")
 	}
 
 	tokenTTLStr := os.Getenv("TOKEN_TTL")
 	if tokenTTLStr == "" {
-		log.Fatal("TOKEN_TTL is required")
+		if !isDev {
+			log.Fatal("TOKEN_TTL is required")
+		}
+		tokenTTLStr = "1h"
 	}
 
 	tokenTTL, err := time.ParseDuration(tokenTTLStr)
@@ -39,6 +55,7 @@ func LoadConfig() Config {
 		log.Fatal("TOKEN_TTL is invalid")
 	}
 	return Config{
+		ENV:             env,
 		Addr:            addr,
 		AuthServiceHost: authServiceHost,
 		JwtSecret:       secretKey,
