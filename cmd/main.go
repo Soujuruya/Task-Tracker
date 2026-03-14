@@ -28,7 +28,8 @@ func main() {
 
 	userRepo := user.NewUserRepository()
 	authService := service.NewAuthService(userRepo)
-	authHandler := handlers.NewAuthHandler(authService, cfg.JwtSecret, cfg.TokenTTL)
+	tokenService := service.NewTokenService(cfg.JwtSecret, cfg.TokenTTL)
+	authHandler := handlers.NewAuthHandler(authService, tokenService)
 
 	taskRepo := task.NewTaskRepository()
 	taskService := service.NewTaskService(taskRepo)

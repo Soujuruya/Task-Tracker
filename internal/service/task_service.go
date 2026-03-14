@@ -8,15 +8,15 @@ import (
 	"strings"
 	"task-tracker-1/internal/domain"
 	"task-tracker-1/internal/pkg"
-	"task-tracker-1/internal/repository/task"
+	"task-tracker-1/internal/repository"
 	"time"
 )
 
 type TaskService struct {
-	repo task.TaskRepo
+	repo repository.TaskRepo
 }
 
-func NewTaskService(repo task.TaskRepo) *TaskService {
+func NewTaskService(repo repository.TaskRepo) *TaskService {
 	return &TaskService{repo: repo}
 }
 

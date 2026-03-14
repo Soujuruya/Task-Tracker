@@ -1,14 +1,11 @@
 package handlers
 
 import (
-	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 	"task-tracker-1/internal/domain"
 	"task-tracker-1/internal/service"
 	"task-tracker-1/internal/transport/dto"
-	"task-tracker-1/internal/transport/middleware"
 	"time"
 )
 
@@ -21,19 +18,15 @@ func NewTaskHandler(taskService *service.TaskService) *TaskHandler {
 }
 
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
-	if !ok || userID == "" {
-		slog.Error("TaskService.Handlers.CreateTask: unauthorized, missing or invalid userID", "userID", userID)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	userID, err := getUserID(r)
+	if writeTaskError(w, "TaskService.Handlers.CreateTask", err) {
 		return
 	}
 
 	var req dto.CreateTaskRequest
 	defer r.Body.Close()
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		slog.Error("TaskService.Handlers.CreateTask: invalid request body", "error", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -44,22 +37,9 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	taskID, err := h.TaskService.CreateTask(userID, task)
-	if err != nil {
-		if errors.Is(err, domain.ErrEmptyTaskTitle) {
-			slog.Error("TaskService.Handlers.CreateTask", "error", err)
-			http.Error(w, "title is required", http.StatusBadRequest)
-			return
-		}
-		if errors.Is(err, domain.ErrInvalidTaskStatus) {
-			slog.Error("TaskService.Handlers.CreateTask", "error", err)
-			http.Error(w, "invalid task status", http.StatusBadRequest)
-			return
-		}
-		slog.Error("TaskService.Handlers.CreateTask: internal server error", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if writeTaskError(w, "TaskService.Handlers.CreateTask", err) {
 		return
 	}
-
 	slog.Info("TaskService.Handlers.CreateTask: new task created", "taskID", taskID)
 
 	var resp dto.CreateTaskResponse
@@ -70,28 +50,19 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	resp.ProgressStatus = string(task.ProgressStatus)
 	resp.CreatedAt = task.CreatedAt.Format(time.RFC3339)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		slog.Error("TaskService.Handlers.CreateTask: encode response", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if !encodeJSON(w, http.StatusCreated, resp) {
 		return
 	}
 }
 
 func (h *TaskHandler) GetListTasks(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
-	if !ok || userID == "" {
-		slog.Error("TaskService.Handlers.GetListTasks: unauthorized, missing or invalid userID", "userID", userID)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	userID, err := getUserID(r)
+	if writeTaskError(w, "TaskService.Handlers.GetListTasks", err) {
 		return
 	}
 
 	tasks, err := h.TaskService.GetListTasks(userID)
-	if err != nil {
-		slog.Error("TaskService.Handlers.GetListTasks: internal server error", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if writeTaskError(w, "TaskService.Handlers.GetListTasks", err) {
 		return
 	}
 	slog.Info("TaskService.Handlers.GetListTasks: new task list")
@@ -109,36 +80,26 @@ func (h *TaskHandler) GetListTasks(w http.ResponseWriter, r *http.Request) {
 
 	resp := dto.GetListTasksResponse{Tasks: taskResponses}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		slog.Error("TaskService.Handlers.GetListTasks: encode response", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if !encodeJSON(w, http.StatusOK, resp) {
 		return
 	}
 }
 
 func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
-	if !ok || userID == "" {
-		slog.Error("TaskService.Handlers.UpdateTask: unauthorized, missing or invalid userID", "userID", userID)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	userID, err := getUserID(r)
+	if writeTaskError(w, "TaskService.Handlers.UpdateTask", err) {
 		return
 	}
 
-	taskID := r.PathValue("id")
-	if taskID == "" {
-		slog.Error("TaskService.Handlers.UpdateTask: taskID is required", "taskID", taskID)
-		http.Error(w, "task id is required", http.StatusBadRequest)
+	taskID, err := getPathID(r)
+	if writeTaskError(w, "TaskService.Handlers.UpdateTask", err) {
 		return
 	}
 
 	var req dto.UpdateTaskModel
 	defer r.Body.Close()
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		slog.Error("TaskService.Handlers.UpdateTask: invalid request body", "error", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -157,32 +118,9 @@ func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updatedTask, err := h.TaskService.UpdateTask(userID, reqTask)
-	if err != nil {
-		if errors.Is(err, domain.ErrEmptyTaskTitle) {
-			slog.Error("TaskService.Handlers.UpdateTask", "error", err)
-			http.Error(w, "title is required", http.StatusBadRequest)
-			return
-		}
-		if errors.Is(err, domain.ErrTaskNotFound) {
-			slog.Error("TaskService.Handlers.UpdateTask", "error", err)
-			http.Error(w, "task not found", http.StatusNotFound)
-			return
-		}
-		if errors.Is(err, domain.ErrInvalidTaskStatus) {
-			slog.Error("TaskService.Handlers.UpdateTask", "error", err)
-			http.Error(w, "invalid task status", http.StatusBadRequest)
-			return
-		}
-		if errors.Is(err, domain.ErrInvalidTransition) {
-			slog.Error("TaskService.Handlers.UpdateTask", "error", err)
-			http.Error(w, "invalid task transition", http.StatusConflict)
-			return
-		}
-		slog.Error("TaskService.Handlers.UpdateTask: internal server error", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if writeTaskError(w, "TaskService.Handlers.UpdateTask", err) {
 		return
 	}
-
 	slog.Info("TaskService.Handlers.UpdateTask: updated task", "taskID", updatedTask.ID)
 
 	resp := dto.UpdateTaskResponse{
@@ -193,44 +131,24 @@ func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:      updatedTask.CreatedAt.Format(time.RFC3339),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		slog.Error("TaskService.Handlers.UpdateTask: encode response", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if !encodeJSON(w, http.StatusOK, resp) {
 		return
 	}
 }
 
 func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
-	if !ok || userID == "" {
-		slog.Error("TaskService.Handlers.Delete: unauthorized, missing or invalid userID", "userID", userID)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	userID, err := getUserID(r)
+	if writeTaskError(w, "TaskService.Handlers.DeleteTask", err) {
 		return
 	}
 
-	taskID := r.PathValue("id")
-	if taskID == "" {
-		slog.Error("TaskService.Handlers.DeleteTask: taskID is required", "taskID", taskID)
-		http.Error(w, "task id is required", http.StatusBadRequest)
+	taskID, err := getPathID(r)
+	if writeTaskError(w, "TaskService.Handlers.DeleteTask", err) {
 		return
 	}
 
-	err := h.TaskService.DeleteTask(userID, taskID)
-	if err != nil {
-		if errors.Is(err, domain.ErrTaskNotFound) {
-			slog.Error("TaskService.Handlers.DeleteTask", "error", err)
-			http.Error(w, "task not found", http.StatusNotFound)
-			return
-		}
-		if errors.Is(err, domain.ErrTaskAlreadyDone) {
-			slog.Error("TaskService.Handlers.DeleteTask", "error", err)
-			http.Error(w, "can not delete task with status done", http.StatusConflict)
-			return
-		}
-		slog.Error("TaskService.Handlers.DeleteTask: internal server error", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	err = h.TaskService.DeleteTask(userID, taskID)
+	if writeTaskError(w, "TaskService.Handlers.DeleteTask", err) {
 		return
 	}
 	slog.Info("TaskService.Handlers.DeleteTask: deleted task", "taskID", taskID)

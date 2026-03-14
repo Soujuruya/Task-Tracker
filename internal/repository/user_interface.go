@@ -1,4 +1,4 @@
-package user
+package repository
 
 import (
 	"task-tracker-1/internal/domain"
