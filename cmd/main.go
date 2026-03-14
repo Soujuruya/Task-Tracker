@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 	"task-tracker-1/internal/config"
+	"task-tracker-1/internal/pkg/hasher"
 	loclog "task-tracker-1/internal/pkg/logger"
 	"task-tracker-1/internal/repository/task"
 	"task-tracker-1/internal/repository/user"
@@ -27,7 +28,14 @@ func main() {
 	slog.Info("Loading config...", "ENVIRONMENT", cfg.ENV)
 
 	userRepo := user.NewUserRepository()
-	authService := service.NewAuthService(userRepo)
+	argon2Hashes := hasher.NewArgon2Hasher(hasher.Argon2Params{
+		Memory:      cfg.Memory,
+		Iterations:  cfg.Iterations,
+		Parallelism: cfg.Parallelism,
+		SaltLength:  cfg.SaltLength,
+		KeyLength:   cfg.KeyLength,
+	})
+	authService := service.NewAuthService(userRepo, argon2Hashes)
 	tokenService := service.NewTokenService(cfg.JwtSecret, cfg.TokenTTL)
 	authHandler := handlers.NewAuthHandler(authService, tokenService)
 

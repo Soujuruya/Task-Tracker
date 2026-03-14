@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"task-tracker-1/internal/domain"
 	"task-tracker-1/internal/pkg"
+	"task-tracker-1/internal/pkg/hasher"
 	"task-tracker-1/internal/repository"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService struct {
 	repo repository.UserRepo
+	hash hasher.Hasher
 }
 
-func NewAuthService(repo repository.UserRepo) *AuthService {
+func NewAuthService(repo repository.UserRepo, hash hasher.Hasher) *AuthService {
 	return &AuthService{
 		repo: repo,
+		hash: hash,
 	}
 }
 
@@ -31,9 +32,9 @@ func (s *AuthService) Register(username, password string) (string, error) {
 		return "", fmt.Errorf("failed to check existing user: %w", err)
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := s.hash.Hash(password)
 	if err != nil {
-		return "", fmt.Errorf("could not hash password: %w", err)
+		return "", fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	userID, err := pkg.GenerateID()
@@ -43,7 +44,7 @@ func (s *AuthService) Register(username, password string) (string, error) {
 	newUser := domain.User{
 		ID:           userID,
 		Username:     username,
-		PasswordHash: string(hash),
+		PasswordHash: hash,
 	}
 
 	id, err := s.repo.Save(newUser)
@@ -67,8 +68,11 @@ func (s *AuthService) Login(username, password string) (string, error) {
 		return "", fmt.Errorf("failed to get user: %w", err)
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return "", domain.ErrInvalidCredentials
+	if err := s.hash.Compare(user.PasswordHash, password); err != nil {
+		if errors.Is(err, domain.ErrInvalidCredentials) {
+			return "", domain.ErrInvalidCredentials
+		}
+		return "", fmt.Errorf("failed to compare password: %w", err)
 	}
 
 	return user.ID, nil
