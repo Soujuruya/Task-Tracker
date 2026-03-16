@@ -36,7 +36,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		ProgressStatus: domain.ProgressStatus(req.ProgressStatus),
 	}
 
-	taskID, err := h.TaskService.CreateTask(userID, task)
+	taskID, err := h.TaskService.CreateTask(r.Context(), userID, task)
 	if writeTaskError(w, "TaskService.Handlers.CreateTask", err) {
 		return
 	}
@@ -61,7 +61,7 @@ func (h *TaskHandler) GetListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := h.TaskService.GetListTasks(userID)
+	tasks, err := h.TaskService.GetListTasks(r.Context(), userID)
 	if writeTaskError(w, "TaskService.Handlers.GetListTasks", err) {
 		return
 	}
@@ -117,7 +117,7 @@ func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 		ProgressStatus: progressStatus,
 	}
 
-	updatedTask, err := h.TaskService.UpdateTask(userID, reqTask)
+	updatedTask, err := h.TaskService.UpdateTask(r.Context(), userID, reqTask)
 	if writeTaskError(w, "TaskService.Handlers.UpdateTask", err) {
 		return
 	}
@@ -147,7 +147,7 @@ func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.TaskService.DeleteTask(userID, taskID)
+	err = h.TaskService.DeleteTask(r.Context(), userID, taskID)
 	if writeTaskError(w, "TaskService.Handlers.DeleteTask", err) {
 		return
 	}

@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"sync"
 	"task-tracker-1/internal/domain"
 )
@@ -19,7 +20,7 @@ func NewUserRepository() *UserRepository {
 }
 
 // Save Сохранение пользователя
-func (r *UserRepository) Save(user domain.User) (string, error) {
+func (r *UserRepository) Save(ctx context.Context, user domain.User) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -36,7 +37,7 @@ func (r *UserRepository) Save(user domain.User) (string, error) {
 }
 
 // GetByUsername Получение юзера по username для логина
-func (r *UserRepository) GetByUsername(username string) (domain.User, error) {
+func (r *UserRepository) GetByUsername(ctx context.Context, username string) (domain.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"task-tracker-1/internal/domain"
@@ -22,8 +23,8 @@ func NewAuthService(repo repository.UserRepo, hash hasher.Hasher) *AuthService {
 }
 
 // Register Регистрация + создание пароля и ID
-func (s *AuthService) Register(username, password string) (string, error) {
-	_, err := s.repo.GetByUsername(username)
+func (s *AuthService) Register(ctx context.Context, username, password string) (string, error) {
+	_, err := s.repo.GetByUsername(ctx, username)
 
 	if err == nil {
 		return "", domain.ErrUserAlreadyExists
@@ -32,7 +33,7 @@ func (s *AuthService) Register(username, password string) (string, error) {
 		return "", fmt.Errorf("failed to check existing user: %w", err)
 	}
 
-	hash, err := s.hash.Hash(password)
+	hash, err := s.hash.Hash(ctx, password)
 	if err != nil {
 		return "", fmt.Errorf("failed to hash password: %w", err)
 	}
@@ -47,7 +48,7 @@ func (s *AuthService) Register(username, password string) (string, error) {
 		PasswordHash: hash,
 	}
 
-	id, err := s.repo.Save(newUser)
+	id, err := s.repo.Save(ctx, newUser)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserAlreadyExists) {
 			return "", err
@@ -59,8 +60,8 @@ func (s *AuthService) Register(username, password string) (string, error) {
 }
 
 // Login Логин + проверка пароля
-func (s *AuthService) Login(username, password string) (string, error) {
-	user, err := s.repo.GetByUsername(username)
+func (s *AuthService) Login(ctx context.Context, username, password string) (string, error) {
+	user, err := s.repo.GetByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			return "", domain.ErrInvalidCredentials
@@ -68,7 +69,7 @@ func (s *AuthService) Login(username, password string) (string, error) {
 		return "", fmt.Errorf("failed to get user: %w", err)
 	}
 
-	if err := s.hash.Compare(user.PasswordHash, password); err != nil {
+	if err := s.hash.Compare(ctx, user.PasswordHash, password); err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
 			return "", domain.ErrInvalidCredentials
 		}

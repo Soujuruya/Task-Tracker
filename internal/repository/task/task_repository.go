@@ -1,6 +1,7 @@
 package task
 
 import (
+	"context"
 	"sync"
 	"task-tracker-1/internal/domain"
 )
@@ -16,7 +17,7 @@ func NewTaskRepository() *TaskRepository {
 	}
 }
 
-func (r *TaskRepository) CreateTask(userID string, task *domain.Task) (string, error) {
+func (r *TaskRepository) CreateTask(ctx context.Context, userID string, task *domain.Task) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -28,7 +29,7 @@ func (r *TaskRepository) CreateTask(userID string, task *domain.Task) (string, e
 	return task.ID, nil
 }
 
-func (r *TaskRepository) GetTaskByID(userID, taskID string) (*domain.Task, error) {
+func (r *TaskRepository) GetTaskByID(ctx context.Context, userID, taskID string) (*domain.Task, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -40,7 +41,7 @@ func (r *TaskRepository) GetTaskByID(userID, taskID string) (*domain.Task, error
 	return task, nil
 }
 
-func (r *TaskRepository) GetListTasks(userID string) ([]*domain.Task, error) {
+func (r *TaskRepository) GetListTasks(ctx context.Context, userID string) ([]*domain.Task, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -57,7 +58,7 @@ func (r *TaskRepository) GetListTasks(userID string) ([]*domain.Task, error) {
 	return tasksSlice, nil
 }
 
-func (r *TaskRepository) UpdateTask(userID string, task *domain.Task) (*domain.Task, error) {
+func (r *TaskRepository) UpdateTask(ctx context.Context, userID string, task *domain.Task) (*domain.Task, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -74,7 +75,7 @@ func (r *TaskRepository) UpdateTask(userID string, task *domain.Task) (*domain.T
 	return r.db[userID][task.ID], nil
 }
 
-func (r *TaskRepository) DeleteTask(userID string, taskID string) error {
+func (r *TaskRepository) DeleteTask(ctx context.Context, userID string, taskID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -20,7 +21,7 @@ func NewTaskService(repo repository.TaskRepo) *TaskService {
 	return &TaskService{repo: repo}
 }
 
-func (s *TaskService) CreateTask(userID string, task *domain.Task) (string, error) {
+func (s *TaskService) CreateTask(ctx context.Context, userID string, task *domain.Task) (string, error) {
 	if task.Title == "" {
 		return "", domain.ErrEmptyTaskTitle
 	}
@@ -41,7 +42,7 @@ func (s *TaskService) CreateTask(userID string, task *domain.Task) (string, erro
 	task.ID = taskID
 	task.CreatedAt = time.Now().UTC()
 
-	_, err = s.repo.CreateTask(userID, task)
+	_, err = s.repo.CreateTask(ctx, userID, task)
 	if err != nil {
 		return "", fmt.Errorf("failed to create task: %w", err)
 	}
@@ -49,8 +50,8 @@ func (s *TaskService) CreateTask(userID string, task *domain.Task) (string, erro
 	return task.ID, nil
 }
 
-func (s *TaskService) GetListTasks(userID string) ([]*domain.Task, error) {
-	tasks, err := s.repo.GetListTasks(userID)
+func (s *TaskService) GetListTasks(ctx context.Context, userID string) ([]*domain.Task, error) {
+	tasks, err := s.repo.GetListTasks(ctx, userID)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			return []*domain.Task{}, nil
@@ -70,8 +71,8 @@ func (s *TaskService) GetListTasks(userID string) ([]*domain.Task, error) {
 	return tasks, nil
 }
 
-func (s *TaskService) UpdateTask(userID string, task *domain.UpdateTaskInput) (*domain.Task, error) {
-	existingTask, err := s.repo.GetTaskByID(userID, task.ID)
+func (s *TaskService) UpdateTask(ctx context.Context, userID string, task *domain.UpdateTaskInput) (*domain.Task, error) {
+	existingTask, err := s.repo.GetTaskByID(ctx, userID, task.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
@@ -95,15 +96,15 @@ func (s *TaskService) UpdateTask(userID string, task *domain.UpdateTaskInput) (*
 		existingTask.ProgressStatus = *task.ProgressStatus
 	}
 
-	updatedTask, err := s.repo.UpdateTask(userID, existingTask)
+	updatedTask, err := s.repo.UpdateTask(ctx, userID, existingTask)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update task: %w", err)
 	}
 	return updatedTask, nil
 }
 
-func (s *TaskService) DeleteTask(userID, taskID string) error {
-	existingTask, err := s.repo.GetTaskByID(userID, taskID)
+func (s *TaskService) DeleteTask(ctx context.Context, userID, taskID string) error {
+	existingTask, err := s.repo.GetTaskByID(ctx, userID, taskID)
 	if err != nil {
 		return fmt.Errorf("failed to get task: %w", err)
 	}
@@ -111,7 +112,7 @@ func (s *TaskService) DeleteTask(userID, taskID string) error {
 		return domain.ErrTaskAlreadyDone
 	}
 
-	if err = s.repo.DeleteTask(userID, taskID); err != nil {
+	if err = s.repo.DeleteTask(ctx, userID, taskID); err != nil {
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
 

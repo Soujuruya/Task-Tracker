@@ -1,6 +1,7 @@
 package hasher
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -18,28 +19,53 @@ var (
 )
 
 type Hasher interface {
-	Hash(password string) (string, error)
-	Compare(hash string, password string) error
+	Hash(ctx context.Context, password string) (string, error)
+	Compare(ctx context.Context, hash string, password string) error
 }
 
 type Argon2Params struct {
-	Memory      uint32 //сколько памяти используется алгоритм в килобайтах
-	Iterations  uint32 // кол-во проходов по памяти
-	Parallelism uint8  // кол-во параллельных потоков
-	SaltLength  uint32 // длина случайной соли(случайный набор байт)
-	KeyLength   uint32 // длина итогового хэша в байтах
+	Memory         uint32 //сколько памяти используется алгоритм в килобайтах
+	Iterations     uint32 // кол-во проходов по памяти
+	Parallelism    uint8  // кол-во параллельных потоков внутри одного хеширования
+	SaltLength     uint32 // длина случайной соли(случайный набор байт)
+	KeyLength      uint32 // длина итогового хэша в байтах
+	MaxConcurrency uint   // кол-во одновременных хэширований на сервере
 }
 
 type Argon2Hasher struct {
 	parameters Argon2Params
+	semaphore  chan struct{}
 }
 
 func NewArgon2Hasher(parameters Argon2Params) *Argon2Hasher {
-	return &Argon2Hasher{parameters: parameters}
+	return &Argon2Hasher{
+		parameters: parameters,
+		semaphore:  make(chan struct{}, parameters.MaxConcurrency),
+	}
+}
+
+func (h *Argon2Hasher) Hash(ctx context.Context, password string) (string, error) {
+	select {
+	case h.semaphore <- struct{}{}:
+		defer func() { <-h.semaphore }()
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	return h.hashPassword(password)
+}
+
+func (h *Argon2Hasher) Compare(ctx context.Context, hash string, password string) error {
+	select {
+	case h.semaphore <- struct{}{}:
+		defer func() { <-h.semaphore }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return h.comparePasswordHash(hash, password)
 }
 
 // Hash Хэширование пароля
-func (h Argon2Hasher) Hash(password string) (string, error) {
+func (h Argon2Hasher) hashPassword(password string) (string, error) {
 	salt, err := generateRandomBytes(h.parameters.SaltLength)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate salt: %w", err)
@@ -73,7 +99,7 @@ func (h Argon2Hasher) Hash(password string) (string, error) {
 }
 
 // Compare Сравнение пароля и хэша
-func (h Argon2Hasher) Compare(encodedHash string, password string) error {
+func (h Argon2Hasher) comparePasswordHash(encodedHash string, password string) error {
 	// Парсим соль и хэш
 	salt, hash, err := decodeHash(encodedHash)
 	if err != nil {

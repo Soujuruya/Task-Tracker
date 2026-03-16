@@ -18,11 +18,12 @@ type Config struct {
 
 // HashParameters Отдельная структура под параметры
 type HashParameters struct {
-	Memory      uint32 //сколько памяти использует алгоритм (в коде килобайты)
-	Iterations  uint32 // кол-во проходов по памяти
-	Parallelism uint8  // кол-во параллельных потоков
-	SaltLength  uint32 // длина случайной соли(случайный набор байт)
-	KeyLength   uint32 // длина итогового хэша в байтах
+	Memory         uint32 //сколько памяти использует алгоритм (в коде килобайты)
+	Iterations     uint32 // кол-во проходов по памяти
+	Parallelism    uint8  // кол-во параллельных потоков внутри одного хеширования
+	SaltLength     uint32 // длина случайной соли(случайный набор байт)
+	KeyLength      uint32 // длина итогового хэша в байтах
+	MaxConcurrency uint   // кол-во одновременных хэширований на сервере
 }
 
 func LoadConfig() Config {
@@ -114,12 +115,20 @@ func parseArgon2HashParameters(isDev bool) HashParameters {
 		}
 		keyLength = "32"
 	}
+	maxConcurrency := os.Getenv("MAX_CONCURRENCY")
+	if maxConcurrency == "" {
+		if !isDev {
+			log.Fatal("MAX_CONCURRENCY is required")
+		}
+		maxConcurrency = "4"
+	}
 	return HashParameters{
-		Memory:      parseUint32(memory) * 1024,
-		Iterations:  parseUint32(iterations),
-		Parallelism: parseUint8(parallelism),
-		SaltLength:  parseUint32(saltLength),
-		KeyLength:   parseUint32(keyLength),
+		Memory:         parseUint32(memory) * 1024,
+		Iterations:     parseUint32(iterations),
+		Parallelism:    parseUint8(parallelism),
+		SaltLength:     parseUint32(saltLength),
+		KeyLength:      parseUint32(keyLength),
+		MaxConcurrency: parseUint(maxConcurrency),
 	}
 }
 
@@ -137,4 +146,12 @@ func parseUint8(val string) uint8 {
 		log.Fatalf("invalid value %s: %v", val, err)
 	}
 	return uint8(n)
+}
+
+func parseUint(val string) uint {
+	n, err := strconv.ParseUint(val, 10, 64)
+	if err != nil {
+		log.Fatalf("invalid value %s: %v", val, err)
+	}
+	return uint(n)
 }

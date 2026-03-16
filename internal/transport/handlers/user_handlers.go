@@ -64,7 +64,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := h.AuthService.Register(req.Username, req.Password)
+	userID, err := h.AuthService.Register(r.Context(), req.Username, req.Password)
 	if writeAuthError(w, "AuthService.Handlers.Register", err) {
 		return
 	}
@@ -96,7 +96,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := h.AuthService.Login(req.Username, req.Password)
+	userID, err := h.AuthService.Login(r.Context(), req.Username, req.Password)
 	if writeAuthError(w, "AuthService.Handlers.Login", err) {
 		return
 	}

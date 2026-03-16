@@ -29,11 +29,12 @@ func main() {
 
 	userRepo := user.NewUserRepository()
 	argon2Hashes := hasher.NewArgon2Hasher(hasher.Argon2Params{
-		Memory:      cfg.Memory,
-		Iterations:  cfg.Iterations,
-		Parallelism: cfg.Parallelism,
-		SaltLength:  cfg.SaltLength,
-		KeyLength:   cfg.KeyLength,
+		Memory:         cfg.Memory,
+		Iterations:     cfg.Iterations,
+		Parallelism:    cfg.Parallelism,
+		SaltLength:     cfg.SaltLength,
+		KeyLength:      cfg.KeyLength,
+		MaxConcurrency: cfg.MaxConcurrency,
 	})
 	authService := service.NewAuthService(userRepo, argon2Hashes)
 	tokenService := service.NewTokenService(cfg.JwtSecret, cfg.TokenTTL)
