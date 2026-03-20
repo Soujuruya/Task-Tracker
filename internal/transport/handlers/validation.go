@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -148,12 +149,16 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, to any) bool {
 
 // Функция для кодирования в JSON
 func encodeJSON(w http.ResponseWriter, status int, data any) bool {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
+	var buf bytes.Buffer
+	// cначала сериализуем в буфер,если Encode упадёт, в w ещё ничего не ушло
+	// и мы можем вернуть 500. если писать напрямую в w,то статус уже не изменить, клиент получит 200 с пустым телом
+	if err := json.NewEncoder(&buf).Encode(data); err != nil {
 		slog.Error("encode response", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return false
 	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(buf.Bytes())
 	return true
 }

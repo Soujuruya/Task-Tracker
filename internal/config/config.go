@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"runtime"
 	"strconv"
 	"time"
 )
@@ -120,7 +121,7 @@ func parseArgon2HashParameters(isDev bool) HashParameters {
 		if !isDev {
 			log.Fatal("MAX_CONCURRENCY is required")
 		}
-		maxConcurrency = "4"
+		maxConcurrency = strconv.Itoa(runtime.GOMAXPROCS(0))
 	}
 	return HashParameters{
 		Memory:         parseUint32(memory) * 1024,

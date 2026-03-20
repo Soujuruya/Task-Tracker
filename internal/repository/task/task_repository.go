@@ -45,10 +45,6 @@ func (r *TaskRepository) GetListTasks(ctx context.Context, userID string) ([]*do
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if _, ok := r.db[userID]; !ok {
-		return nil, domain.ErrUserNotFound
-	}
-
 	tasks := r.db[userID]
 
 	tasksSlice := make([]*domain.Task, 0, len(tasks))

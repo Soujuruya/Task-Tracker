@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"task-tracker-1/internal/domain"
 	"time"
@@ -28,7 +29,11 @@ func NewTokenService(jwtSecretKey []byte, accessTokenTTL time.Duration) *TokenSe
 }
 
 // Добавлена отдельная функция для генерации access-токена
-func (t *TokenService) GenerateAccessToken(userID string, username string) (string, error) {
+func (t *TokenService) GenerateAccessToken(ctx context.Context, userID string, username string) (string, error) {
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
 	claims := AccessClaims{
 		UserID:   userID,
 		Username: username,
@@ -48,7 +53,11 @@ func (t *TokenService) GenerateAccessToken(userID string, username string) (stri
 }
 
 // Добавлена отдельная функция валидации токена
-func (t *TokenService) ValidateAccessToken(token string) (*AccessClaims, error) {
+func (t *TokenService) ValidateAccessToken(ctx context.Context, token string) (*AccessClaims, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	claims := &AccessClaims{}
 
 	_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {

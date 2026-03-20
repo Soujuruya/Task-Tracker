@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -53,9 +52,6 @@ func (s *TaskService) CreateTask(ctx context.Context, userID string, task *domai
 func (s *TaskService) GetListTasks(ctx context.Context, userID string) ([]*domain.Task, error) {
 	tasks, err := s.repo.GetListTasks(ctx, userID)
 	if err != nil {
-		if errors.Is(err, domain.ErrUserNotFound) {
-			return []*domain.Task{}, nil
-		}
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
