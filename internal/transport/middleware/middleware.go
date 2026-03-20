@@ -3,15 +3,14 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
+	"task-tracker-1/internal/pkg"
+	"task-tracker-1/internal/pkg/ctxkeys"
 	"task-tracker-1/internal/transport/dto"
 	"time"
 )
-
-type contextKey string
-
-const UserIDKey contextKey = "userID"
 
 var httpClient = &http.Client{Timeout: 3 * time.Second}
 
@@ -57,8 +56,34 @@ func ValidateTokenMiddleware(authServiceURl string) func(http.Handler) http.Hand
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), UserIDKey, validateResponse.UserID)
+			ctx := context.WithValue(r.Context(), ctxkeys.UserIDKey, validateResponse.UserID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func RequestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID, err := pkg.GenerateID()
+		if err != nil {
+			requestID = "unknown"
+		}
+		ctx := context.WithValue(r.Context(), ctxkeys.RequestIDKey, requestID)
+		w.Header().Set("X-Request-ID", requestID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func RequestLoggerMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID, _ := r.Context().Value(ctxkeys.RequestIDKey).(string)
+
+		slog.Info("incoming request",
+			"request_id", requestID,
+			"method", r.Method,
+			"url", r.URL.Path,
+		)
+
+		next.ServeHTTP(w, r)
+	})
 }

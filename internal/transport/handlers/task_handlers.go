@@ -18,8 +18,10 @@ func NewTaskHandler(taskService *service.TaskService) *TaskHandler {
 }
 
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+
 	userID, err := getUserID(r)
-	if writeTaskError(w, "TaskService.Handlers.CreateTask", err) {
+	if writeTaskError(w, requestID, err) {
 		return
 	}
 
@@ -30,6 +32,8 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	slog.Debug("create task request", "request_id", requestID, "title", req.Title, "status", req.ProgressStatus)
+
 	task := &domain.Task{
 		Title:          req.Title,
 		Description:    req.Description,
@@ -37,10 +41,10 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	taskID, err := h.TaskService.CreateTask(r.Context(), userID, task)
-	if writeTaskError(w, "TaskService.Handlers.CreateTask", err) {
+	if writeTaskError(w, requestID, err) {
 		return
 	}
-	slog.Info("TaskService.Handlers.CreateTask: new task created", "taskID", taskID)
+	slog.Info("task created", "request_id", requestID, "user_id", userID, "task_id", taskID)
 
 	var resp dto.CreateTaskResponse
 
@@ -56,16 +60,17 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TaskHandler) GetListTasks(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
 	userID, err := getUserID(r)
-	if writeTaskError(w, "TaskService.Handlers.GetListTasks", err) {
+	if writeTaskError(w, requestID, err) {
 		return
 	}
 
 	tasks, err := h.TaskService.GetListTasks(r.Context(), userID)
-	if writeTaskError(w, "TaskService.Handlers.GetListTasks", err) {
+	if writeTaskError(w, requestID, err) {
 		return
 	}
-	slog.Info("TaskService.Handlers.GetListTasks: new task list")
+	slog.Info("new task list", "request_id", requestID, "user_id", userID, "tasks_count", len(tasks))
 
 	taskResponses := make([]dto.TaskResponse, 0, len(tasks))
 	for _, task := range tasks {
@@ -86,13 +91,14 @@ func (h *TaskHandler) GetListTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
 	userID, err := getUserID(r)
-	if writeTaskError(w, "TaskService.Handlers.UpdateTask", err) {
+	if writeTaskError(w, requestID, err) {
 		return
 	}
 
 	taskID, err := getPathID(r)
-	if writeTaskError(w, "TaskService.Handlers.UpdateTask", err) {
+	if writeTaskError(w, requestID, err) {
 		return
 	}
 
@@ -102,6 +108,8 @@ func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+
+	slog.Debug("update task request", "request_id", requestID, "task_id", taskID, "title", req.Title, "status", req.ProgressStatus)
 
 	var progressStatus *domain.ProgressStatus
 
@@ -118,10 +126,10 @@ func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updatedTask, err := h.TaskService.UpdateTask(r.Context(), userID, reqTask)
-	if writeTaskError(w, "TaskService.Handlers.UpdateTask", err) {
+	if writeTaskError(w, requestID, err) {
 		return
 	}
-	slog.Info("TaskService.Handlers.UpdateTask: updated task", "taskID", updatedTask.ID)
+	slog.Info("task updated", "request_id", requestID, "user_id", userID, "task_id", taskID)
 
 	resp := dto.UpdateTaskResponse{
 		ID:             taskID,
@@ -137,20 +145,43 @@ func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
 	userID, err := getUserID(r)
-	if writeTaskError(w, "TaskService.Handlers.DeleteTask", err) {
+	if writeTaskError(w, requestID, err) {
 		return
 	}
 
 	taskID, err := getPathID(r)
-	if writeTaskError(w, "TaskService.Handlers.DeleteTask", err) {
+	if writeTaskError(w, requestID, err) {
 		return
 	}
 
 	err = h.TaskService.DeleteTask(r.Context(), userID, taskID)
-	if writeTaskError(w, "TaskService.Handlers.DeleteTask", err) {
+	if writeTaskError(w, requestID, err) {
 		return
 	}
-	slog.Info("TaskService.Handlers.DeleteTask: deleted task", "taskID", taskID)
+	slog.Info("task deleted", "request_id", requestID, "user_id", userID, "task_id", taskID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *TaskHandler) GetTaskHistory(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, err := getUserID(r)
+	if writeTaskError(w, requestID, err) {
+		return
+	}
+
+	taskID, err := getPathID(r)
+	if writeTaskError(w, requestID, err) {
+		return
+	}
+
+	auditLogs, err := h.TaskService.GetTaskHistory(r.Context(), userID, taskID)
+	if writeTaskError(w, requestID, err) {
+		return
+	}
+	slog.Info("task history", "request_id", requestID, "task_id", taskID, "changes", len(auditLogs))
+	if !encodeJSON(w, http.StatusOK, auditLogs) {
+		return
+	}
 }

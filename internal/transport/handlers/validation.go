@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"task-tracker-1/internal/domain"
+	"task-tracker-1/internal/pkg/ctxkeys"
 	"task-tracker-1/internal/transport/dto"
-	"task-tracker-1/internal/transport/middleware"
 )
 
 // Добавлена новая функция для парсинга токена из заголовка Authorization
@@ -24,7 +24,7 @@ func parseBearerToken(r *http.Request) (string, error) {
 
 // Добавлена новая фукнция извлечения из контекста UserID
 func getUserID(r *http.Request) (string, error) {
-	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(string)
 	if !ok || userID == "" {
 		slog.Error("unauthorized: missing or invalid userID")
 		return "", domain.ErrInvalidUserID
@@ -42,77 +42,60 @@ func getPathID(r *http.Request) (string, error) {
 }
 
 // Добавлена новая функция обработки ошибок в TaskHandlers
-func writeTaskError(w http.ResponseWriter, object string, err error) bool {
+func writeTaskError(w http.ResponseWriter, requestID string, err error) bool {
 	if err == nil {
 		return false
 	}
+	slog.Error("task error", "request_id", requestID, "error", err)
 	switch {
 	case errors.Is(err, domain.ErrTaskNotFound):
-		slog.Error(object, "error", err)
 		http.Error(w, "task not found", http.StatusNotFound)
 	case errors.Is(err, domain.ErrEmptyTaskTitle):
-		slog.Error(object, "error", err)
 		http.Error(w, "empty task title", http.StatusBadRequest)
 	case errors.Is(err, domain.ErrTaskAlreadyDone):
-		slog.Error(object, "error", err)
 		http.Error(w, "task already done", http.StatusBadRequest)
 	case errors.Is(err, domain.ErrInvalidTaskStatus):
-		slog.Error(object, "error", err)
 		http.Error(w, "invalid task status", http.StatusBadRequest)
 	case errors.Is(err, domain.ErrInvalidTransition):
-		slog.Error(object, "error", err)
 		http.Error(w, "invalid task transition", http.StatusConflict)
 	case errors.Is(err, domain.ErrInvalidUserID):
-		slog.Error(object, "error", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	case errors.Is(err, domain.ErrMissingPathID):
-		slog.Error(object, "error", err)
 		http.Error(w, "id is required", http.StatusBadRequest)
 	default:
-		slog.Error(object, "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
 	return true
 }
 
 // Добавлена фукнция обработки ошибок в AuthHandlers
-func writeAuthError(w http.ResponseWriter, object string, err error) bool {
+func writeAuthError(w http.ResponseWriter, requestID string, err error) bool {
 	if err == nil {
 		return false
 	}
+	slog.Error("auth error", "request_id", requestID, "error", err)
 	switch {
 	case errors.Is(err, domain.ErrUserAlreadyExists):
-		slog.Error(object, "error", err)
 		http.Error(w, "user already exists", http.StatusConflict)
 	case errors.Is(err, domain.ErrUserNameRequired):
-		slog.Error(object, "error", err)
 		http.Error(w, "username is required", http.StatusBadRequest)
 	case errors.Is(err, domain.ErrPasswordRequired):
-		slog.Error(object, "error", err)
 		http.Error(w, "password is required", http.StatusBadRequest)
 	case errors.Is(err, domain.ErrCredentialsRequired):
-		slog.Error(object, "error", err)
 		http.Error(w, "credentials are required", http.StatusBadRequest)
 	case errors.Is(err, domain.ErrInvalidCredentials):
-		slog.Error(object, "error", err)
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 	case errors.Is(err, domain.ErrInvalidUserID):
-		slog.Error(object, "error", err)
 		http.Error(w, "invalid userID", http.StatusUnauthorized)
 	case errors.Is(err, domain.ErrTokenInvalid):
-		slog.Error(object, "error", err)
 		http.Error(w, "token invalid", http.StatusUnauthorized)
 	case errors.Is(err, domain.ErrTokenExpired):
-		slog.Error(object, "error", err)
 		http.Error(w, "token expired", http.StatusUnauthorized)
 	case errors.Is(err, domain.ErrMissingToken):
-		slog.Error(object, "error", err)
 		http.Error(w, "missing token", http.StatusUnauthorized)
 	case errors.Is(err, domain.ErrGenerateToken):
-		slog.Error(object, "error", err)
 		http.Error(w, "failed to generate token", http.StatusInternalServerError)
 	default:
-		slog.Error(object, "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
 	return true
@@ -161,4 +144,10 @@ func encodeJSON(w http.ResponseWriter, status int, data any) bool {
 	w.WriteHeader(status)
 	w.Write(buf.Bytes())
 	return true
+}
+
+// Функция извлечения request-id
+func getRequestID(r *http.Request) string {
+	id, _ := r.Context().Value(ctxkeys.RequestIDKey).(string)
+	return id
 }

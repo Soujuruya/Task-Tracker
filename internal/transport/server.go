@@ -18,12 +18,14 @@ func NewServer(authHandler *handlers.AuthHandler, taskHandler *handlers.TaskHand
 	mux.HandleFunc("POST /register", authHandler.Register)
 	mux.HandleFunc("POST /login", authHandler.Login)
 	mux.HandleFunc("/validate", authHandler.ValidateToken)
+	handler := middleware.RequestIDMiddleware(middleware.RequestLoggerMiddleware(mux))
 	//Task-service
 	taskMux := http.NewServeMux()
 	taskMux.HandleFunc("POST /tasks", taskHandler.CreateTask)
 	taskMux.HandleFunc("GET /tasks", taskHandler.GetListTasks)
 	taskMux.HandleFunc("PUT /tasks/{id}", taskHandler.UpdateTask)
 	taskMux.HandleFunc("DELETE /tasks/{id}", taskHandler.DeleteTask)
+	taskMux.HandleFunc("GET /tasks/{id}/history", taskHandler.GetTaskHistory)
 
 	//Auth-Middleware
 	taskMiddleware := middleware.ValidateTokenMiddleware(authServiceHost)
@@ -32,7 +34,7 @@ func NewServer(authHandler *handlers.AuthHandler, taskHandler *handlers.TaskHand
 
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,

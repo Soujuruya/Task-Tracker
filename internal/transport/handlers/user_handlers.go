@@ -26,15 +26,16 @@ func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	requestID := getRequestID(r)
 
 	token, err := parseBearerToken(r)
-	if writeAuthError(w, "AuthService.Handlers.ValidateToken", err) {
+	if writeAuthError(w, requestID, err) {
 		return
 	}
-	slog.Info("AuthService.Handlers.ValidateToken: token received")
+	slog.Debug("token received", "request_id", requestID)
 
-	accessClaims, err := h.TokenService.ValidateAccessToken(token)
-	if writeAuthError(w, "AuthService.Handlers.ValidateToken", err) {
+	accessClaims, err := h.TokenService.ValidateAccessToken(r.Context(), token)
+	if writeAuthError(w, requestID, err) {
 		return
 	}
 
@@ -43,7 +44,7 @@ func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 		UserID: accessClaims.UserID,
 	}
 
-	slog.Info("AuthService.Handlers.ValidateToken: token valid", "user_id", accessClaims.UserID)
+	slog.Debug("token valid", "request_id", requestID, "user_id", accessClaims.UserID)
 	if !encodeJSON(w, http.StatusOK, resp) {
 		return
 	}
@@ -51,24 +52,26 @@ func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
 
 // Register Регистрация пользователя
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+
 	var req dto.RegisterRequest
 
 	defer r.Body.Close()
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	slog.Info("AuthService.Handlers.Register", "username", req.Username)
+	slog.Debug("register attempt", "request_id", requestID, "username", req.Username)
 
 	err := validateRegisterRequest(req)
-	if writeAuthError(w, "AuthService.Handlers.Register", err) {
+	if writeAuthError(w, requestID, err) {
 		return
 	}
 
 	userID, err := h.AuthService.Register(r.Context(), req.Username, req.Password)
-	if writeAuthError(w, "AuthService.Handlers.Register", err) {
+	if writeAuthError(w, requestID, err) {
 		return
 	}
-	slog.Info("AuthService.Handlers.Register: registration successful", "user_id", userID)
+	slog.Info("registration successful", "request_id", requestID, "user_id", userID)
 
 	resp := struct {
 		UserID string `json:"user_id"`
@@ -83,29 +86,31 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 // Login Аутентификация и получение токена
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+
 	var req dto.LoginRequest
 
 	defer r.Body.Close()
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	slog.Info("AuthService.Handlers.Login: login attempt", "username", req.Username)
+	slog.Debug("login attempt", "request_id", requestID, "username", req.Username)
 
 	err := validateLoginRequest(req)
-	if writeAuthError(w, "AuthService.Handlers.Login", err) {
+	if writeAuthError(w, requestID, err) {
 		return
 	}
 
 	userID, err := h.AuthService.Login(r.Context(), req.Username, req.Password)
-	if writeAuthError(w, "AuthService.Handlers.Login", err) {
+	if writeAuthError(w, requestID, err) {
 		return
 	}
 
-	signedToken, err := h.TokenService.GenerateAccessToken(userID, req.Username)
-	if writeAuthError(w, "AuthService.Handlers.Login", err) {
+	signedToken, err := h.TokenService.GenerateAccessToken(r.Context(), userID, req.Username)
+	if writeAuthError(w, requestID, err) {
 		return
 	}
-	slog.Info("AuthService.Handlers.Login: login successful", "username", req.Username, "user_id", userID)
+	slog.Info("login successful", "request_id", requestID, "username", req.Username, "user_id", userID)
 
 	resp := struct {
 		AccessToken string `json:"access_token"`

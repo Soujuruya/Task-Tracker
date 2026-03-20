@@ -1,75 +1,25 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"log"
 	"log/slog"
-	"net/http"
-	"os/signal"
-	"syscall"
+	"task-tracker-1/internal/app"
 	"task-tracker-1/internal/config"
-	"task-tracker-1/internal/pkg/hasher"
 	loclog "task-tracker-1/internal/pkg/logger"
-	"task-tracker-1/internal/repository/task"
-	"task-tracker-1/internal/repository/user"
-	"task-tracker-1/internal/service"
-	"task-tracker-1/internal/transport"
-	"task-tracker-1/internal/transport/handlers"
-	"time"
 )
 
 func main() {
-	logger := loclog.Init()
-	slog.SetDefault(logger)
-
 	// Парсим переменные окружения из .env
 	cfg := config.LoadConfig()
+
+	logger := loclog.Init(cfg.ENV)
+	slog.SetDefault(logger)
+
 	slog.Info("Loading config...", "ENVIRONMENT", cfg.ENV)
-
-	userRepo := user.NewUserRepository()
-	argon2Hashes := hasher.NewArgon2Hasher(hasher.Argon2Params{
-		Memory:         cfg.Memory,
-		Iterations:     cfg.Iterations,
-		Parallelism:    cfg.Parallelism,
-		SaltLength:     cfg.SaltLength,
-		KeyLength:      cfg.KeyLength,
-		MaxConcurrency: cfg.MaxConcurrency,
-	})
-	authService := service.NewAuthService(userRepo, argon2Hashes)
-	tokenService := service.NewTokenService(cfg.JwtSecret, cfg.TokenTTL)
-	authHandler := handlers.NewAuthHandler(authService, tokenService)
-
-	taskRepo := task.NewTaskRepository()
-	taskService := service.NewTaskService(taskRepo)
-	taskHandler := handlers.NewTaskHandler(taskService)
-
-	server := transport.NewServer(authHandler, taskHandler, cfg.Addr, cfg.AuthServiceHost)
-
-	// Ловим сигналы SIGINT/SIGTERM
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	go func() {
-		log.Printf("starting server at %s", cfg.Addr)
-		if err := server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) { // игнорируем ErrServerClosed ошибку для чистого завершения
-			log.Fatal("failed to start server:", err)
-		}
-	}()
-
-	// Ждём сигнал завершения
-	<-ctx.Done()
-	log.Println("shutting down server...")
-
-	// Контекст с таймаутом для завершения текущих запросов
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Сервер перестаёт принимать запросы,дожидается завершения текущих запросов и выключается
-	// Контекст нужен, чтобы сервер бесконечно не ждал завершения запросов, 10 секунд и принудительно завершаем.
-	if err := server.GracefulShutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal("failed to shutdown server:", err)
+	slog.Info("Server run", "addr", cfg.Addr)
+	// Собираем всё вместе и запускаем
+	app := app.NewApp(&cfg)
+	if err := app.Start(); err != nil {
+		log.Fatal(err)
 	}
-
-	log.Println("shutting down gracefully")
 }

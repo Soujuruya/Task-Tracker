@@ -5,7 +5,17 @@ import (
 	"os"
 )
 
-// ToDo Добавить нормальный логгер, Zap например
-func Init() *slog.Logger {
-	return slog.New(slog.NewJSONHandler(os.Stdout, nil))
+func Init(env string) *slog.Logger {
+	var logLevel slog.Level
+	if env == "development" {
+		logLevel = slog.LevelDebug
+	} else {
+		logLevel = slog.LevelInfo
+	}
+
+	opts := slog.HandlerOptions{
+		Level: logLevel,
+	}
+
+	return slog.New(slog.NewJSONHandler(os.Stdout, &opts))
 }
