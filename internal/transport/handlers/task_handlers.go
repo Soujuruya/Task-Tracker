@@ -66,14 +66,24 @@ func (h *TaskHandler) GetListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := h.TaskService.GetListTasks(r.Context(), userID)
+	reqFilter, err := fromQueryParams(r)
 	if writeTaskError(w, requestID, err) {
 		return
 	}
-	slog.Info("new task list", "request_id", requestID, "user_id", userID, "tasks_count", len(tasks))
 
-	taskResponses := make([]dto.TaskResponse, 0, len(tasks))
-	for _, task := range tasks {
+	taskFilter, err := convTaskFilterRequest(reqFilter)
+	if writeTaskError(w, requestID, err) {
+		return
+	}
+
+	tasks, err := h.TaskService.GetListTasks(r.Context(), userID, taskFilter)
+	if writeTaskError(w, requestID, err) {
+		return
+	}
+	slog.Info("new task list", "request_id", requestID, "user_id", userID, "tasks_count", tasks.Total)
+
+	taskResponses := make([]dto.TaskResponse, 0, len(tasks.Tasks))
+	for _, task := range tasks.Tasks {
 		taskResponses = append(taskResponses, dto.TaskResponse{
 			ID:             task.ID,
 			Title:          task.Title,
@@ -83,7 +93,15 @@ func (h *TaskHandler) GetListTasks(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	resp := dto.GetListTasksResponse{Tasks: taskResponses}
+	resp := dto.GetListTasksResponse{
+		Tasks: taskResponses,
+		Pagination: dto.Pagination{
+			Total:      tasks.Total,
+			Page:       tasks.Page,
+			PageSize:   tasks.PageSize,
+			TotalPages: tasks.TotalPages,
+		},
+	}
 
 	if !encodeJSON(w, http.StatusOK, resp) {
 		return

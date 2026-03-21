@@ -60,21 +60,21 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 }
 
 // Login Логин + проверка пароля
-func (s *AuthService) Login(ctx context.Context, username, password string) (string, error) {
+func (s *AuthService) Login(ctx context.Context, username, password string) (domain.User, error) {
 	user, err := s.repo.GetByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
-			return "", domain.ErrInvalidCredentials
+			return domain.User{}, domain.ErrInvalidCredentials
 		}
-		return "", fmt.Errorf("failed to get user: %w", err)
+		return domain.User{}, fmt.Errorf("failed to get user: %w", err)
 	}
 
 	if err := s.hash.Compare(ctx, user.PasswordHash, password); err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
-			return "", domain.ErrInvalidCredentials
+			return domain.User{}, domain.ErrInvalidCredentials
 		}
-		return "", fmt.Errorf("failed to compare password: %w", err)
+		return domain.User{}, fmt.Errorf("failed to compare password: %w", err)
 	}
 
-	return user.ID, nil
+	return user, nil
 }

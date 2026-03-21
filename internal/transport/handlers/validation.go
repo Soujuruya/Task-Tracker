@@ -1,45 +1,12 @@
 package handlers
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 	"task-tracker-1/internal/domain"
-	"task-tracker-1/internal/pkg/ctxkeys"
 	"task-tracker-1/internal/transport/dto"
 )
-
-// Добавлена новая функция для парсинга токена из заголовка Authorization
-func parseBearerToken(r *http.Request) (string, error) {
-	tokenString := r.Header.Get("Authorization")
-	token := strings.TrimPrefix(tokenString, "Bearer ")
-	if token == "" {
-		return "", domain.ErrMissingToken
-	}
-	return token, nil
-}
-
-// Добавлена новая фукнция извлечения из контекста UserID
-func getUserID(r *http.Request) (string, error) {
-	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(string)
-	if !ok || userID == "" {
-		slog.Error("unauthorized: missing or invalid userID")
-		return "", domain.ErrInvalidUserID
-	}
-	return userID, nil
-}
-
-// Добавлена фукнция извлечения ID из path
-func getPathID(r *http.Request) (string, error) {
-	id := r.PathValue("id")
-	if id == "" {
-		return "", domain.ErrMissingPathID
-	}
-	return id, nil
-}
 
 // Добавлена новая функция обработки ошибок в TaskHandlers
 func writeTaskError(w http.ResponseWriter, requestID string, err error) bool {
@@ -62,6 +29,8 @@ func writeTaskError(w http.ResponseWriter, requestID string, err error) bool {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	case errors.Is(err, domain.ErrMissingPathID):
 		http.Error(w, "id is required", http.StatusBadRequest)
+	case errors.Is(err, domain.ErrInvalidQueryParam):
+		http.Error(w, "invalid query param", http.StatusBadRequest)
 	default:
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
@@ -120,34 +89,13 @@ func validateLoginRequest(req dto.LoginRequest) error {
 	return nil
 }
 
-// Фукнция для декодирования JSON
-func decodeJSON(w http.ResponseWriter, r *http.Request, to any) bool {
-	if err := json.NewDecoder(r.Body).Decode(to); err != nil {
-		slog.Error("invalid request body", "error", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
-		return false
+// Фукнция валидации данных пагинации
+func isInvalidPagination(page, pageSize int) bool {
+	if page < 1 {
+		return true
 	}
-	return true
-}
-
-// Функция для кодирования в JSON
-func encodeJSON(w http.ResponseWriter, status int, data any) bool {
-	var buf bytes.Buffer
-	// cначала сериализуем в буфер,если Encode упадёт, в w ещё ничего не ушло
-	// и мы можем вернуть 500. если писать напрямую в w,то статус уже не изменить, клиент получит 200 с пустым телом
-	if err := json.NewEncoder(&buf).Encode(data); err != nil {
-		slog.Error("encode response", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return false
+	if pageSize > 100 || pageSize < 1 {
+		return true
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	w.Write(buf.Bytes())
-	return true
-}
-
-// Функция извлечения request-id
-func getRequestID(r *http.Request) string {
-	id, _ := r.Context().Value(ctxkeys.RequestIDKey).(string)
-	return id
+	return false
 }

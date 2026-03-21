@@ -51,27 +51,39 @@ func (s *TaskService) CreateTask(ctx context.Context, userID string, task *domai
 	if err != nil {
 		return "", fmt.Errorf("failed to create task: %w", err)
 	}
-	s.auditlog.SaveOwner(ctx, taskID, userID)
+	if err := s.auditlog.SaveOwner(ctx, taskID, userID); err != nil {
+		slog.Error("failed to save audit log owner", "task_id", taskID, "user_id", userID, "error", err)
+	}
 
 	return task.ID, nil
 }
 
-func (s *TaskService) GetListTasks(ctx context.Context, userID string) ([]*domain.Task, error) {
+func (s *TaskService) GetListTasks(ctx context.Context, userID string, taskFilter domain.TaskFilter) (*domain.TaskListResult, error) {
 	tasks, err := s.repo.GetListTasks(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
+	filteredTasks := domain.FilterTasks(tasks, taskFilter)
+
 	//Сортируем таски по времени создании для того чтобы пользователь видел сначала более новые таски
 	//Если даты создания идентичны, то сортируем по второму критерию - ID таски.
-	slices.SortFunc(tasks, func(i, j *domain.Task) int {
+	slices.SortFunc(filteredTasks, func(i, j *domain.Task) int {
 		if i.CreatedAt.Equal(j.CreatedAt) {
 			return strings.Compare(i.ID, j.ID)
 		}
 		return j.CreatedAt.Compare(i.CreatedAt)
 	})
 
-	return tasks, nil
+	total, start, end := domain.TasksPagination(taskFilter, filteredTasks)
+
+	return &domain.TaskListResult{
+		Tasks:      filteredTasks[start:end],
+		Total:      total,
+		Page:       taskFilter.Page,
+		PageSize:   taskFilter.PageSize,
+		TotalPages: (total + taskFilter.PageSize - 1) / taskFilter.PageSize,
+	}, nil
 }
 
 func (s *TaskService) UpdateTask(ctx context.Context, userID string, task *domain.UpdateTaskInput) (*domain.Task, error) {

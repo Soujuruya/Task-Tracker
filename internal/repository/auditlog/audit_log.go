@@ -47,11 +47,12 @@ func (r *AuditLogRepository) InsertManyAuditLogs(ctx context.Context, entries []
 }
 
 // SaveOwner GetOwner Добавил методы сохранения userID задачи, чтобы после ее удаления мы не ловили ошибку, что задачи нет
-func (r *AuditLogRepository) SaveOwner(ctx context.Context, taskID string, userID string) {
+func (r *AuditLogRepository) SaveOwner(ctx context.Context, taskID string, userID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.ownerIdx[taskID] = userID
+	return nil
 }
 
 func (r *AuditLogRepository) GetOwner(ctx context.Context, taskID string) (string, error) {

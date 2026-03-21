@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os/signal"
@@ -18,7 +19,7 @@ import (
 	"time"
 )
 
-// Вынес сбор всех зависимостей из main, так как уже было нечитаемо
+// Вынес сбор всех зависимостей из main, так как уже main сильно разросся
 type App struct {
 	server *transport.Server
 }
@@ -55,14 +56,20 @@ func (app *App) Start() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	errCh := make(chan error, 1)
 	go func() {
 		if err := app.server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) { // игнорируем ErrServerClosed ошибку для чистого завершения
-			log.Fatal("failed to start server:", err)
+			errCh <- err
 		}
 	}()
 
 	// Ждём сигнал завершения
-	<-ctx.Done()
+	select {
+	case err := <-errCh:
+		return fmt.Errorf("server error: %w", err)
+	case <-ctx.Done():
+	}
+
 	log.Println("shutting down server...")
 
 	// Контекст с таймаутом для завершения текущих запросов

@@ -19,6 +19,7 @@ var (
 	ErrInvalidTaskStatus = errors.New("invalid task status")
 	ErrInvalidTransition = errors.New("invalid status transition")
 	ErrMissingPathID     = errors.New("missing path id")
+	ErrInvalidQueryParam = errors.New("invalid query param")
 )
 
 var (

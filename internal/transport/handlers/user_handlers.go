@@ -101,16 +101,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := h.AuthService.Login(r.Context(), req.Username, req.Password)
+	user, err := h.AuthService.Login(r.Context(), req.Username, req.Password)
 	if writeAuthError(w, requestID, err) {
 		return
 	}
 
-	signedToken, err := h.TokenService.GenerateAccessToken(r.Context(), userID, req.Username)
+	signedToken, err := h.TokenService.GenerateAccessToken(r.Context(), user.ID, user.Username)
 	if writeAuthError(w, requestID, err) {
 		return
 	}
-	slog.Info("login successful", "request_id", requestID, "username", req.Username, "user_id", userID)
+	slog.Info("login successful", "request_id", requestID, "username", user.Username, "user_id", user.ID)
 
 	resp := struct {
 		AccessToken string `json:"access_token"`
