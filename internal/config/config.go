@@ -13,7 +13,8 @@ type Config struct {
 	Addr            string
 	AuthServiceHost string
 	JwtSecret       []byte
-	TokenTTL        time.Duration
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
 	HashParameters
 }
 
@@ -57,24 +58,35 @@ func LoadConfig() Config {
 		secretKey = []byte("secret")
 	}
 
-	tokenTTLStr := os.Getenv("TOKEN_TTL")
-	if tokenTTLStr == "" {
+	accessTokenTTLStr := os.Getenv("ACCESS_TOKEN_TTL")
+	if accessTokenTTLStr == "" {
 		if !isDev {
-			log.Fatal("TOKEN_TTL is required")
+			log.Fatal("ACCESS_TOKEN_TTL is required")
 		}
-		tokenTTLStr = "1h"
+		accessTokenTTLStr = "1h"
 	}
-
-	tokenTTL, err := time.ParseDuration(tokenTTLStr)
+	refreshTokenTTLStr := os.Getenv("REFRESH_TOKEN_TTL")
+	if refreshTokenTTLStr == "" {
+		if !isDev {
+			log.Fatal("REFRESH_TOKEN_TTL is required")
+		}
+		refreshTokenTTLStr = "168h"
+	}
+	accessTokenTTL, err := time.ParseDuration(accessTokenTTLStr)
 	if err != nil {
-		log.Fatal("TOKEN_TTL is invalid")
+		log.Fatal("ACCESS_TOKEN_TTL is invalid")
+	}
+	refreshTokenTTL, err := time.ParseDuration(refreshTokenTTLStr)
+	if err != nil {
+		log.Fatal("REFRESH_TOKEN_TTL is invalid")
 	}
 	return Config{
 		ENV:             env,
 		Addr:            addr,
 		AuthServiceHost: authServiceHost,
 		JwtSecret:       secretKey,
-		TokenTTL:        tokenTTL,
+		AccessTokenTTL:  accessTokenTTL,
+		RefreshTokenTTL: refreshTokenTTL,
 		HashParameters:  hashParameters,
 	}
 }

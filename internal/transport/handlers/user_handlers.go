@@ -106,18 +106,75 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Данный Logout как завершение старой сессии при логине
+	err = h.TokenService.Logout(r.Context(), user.ID)
+	if writeAuthError(w, requestID, err) {
+		return
+	}
+
 	signedToken, err := h.TokenService.GenerateAccessToken(r.Context(), user.ID, user.Username)
+	if writeAuthError(w, requestID, err) {
+		return
+	}
+	refreshToken, err := h.TokenService.GenerateRefreshToken(r.Context(), user.ID, user.Username)
 	if writeAuthError(w, requestID, err) {
 		return
 	}
 	slog.Info("login successful", "request_id", requestID, "username", user.Username, "user_id", user.ID)
 
-	resp := struct {
-		AccessToken string `json:"access_token"`
-	}{
-		AccessToken: signedToken,
+	resp := dto.LoginResponse{
+		AccessToken:  signedToken,
+		RefreshToken: refreshToken,
 	}
 
+	if !encodeJSON(w, http.StatusOK, resp) {
+		return
+	}
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, err := getUserID(r)
+	if writeAuthError(w, requestID, err) {
+		return
+	}
+	slog.Debug("logout attempt", "request_id", requestID, "user_id", userID)
+
+	err = h.TokenService.Logout(r.Context(), userID)
+	if writeAuthError(w, requestID, err) {
+		return
+	}
+	slog.Info("logout successful", "request_id", requestID, "user_id", userID)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+
+	var req dto.RefreshRequest
+	defer r.Body.Close()
+
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	slog.Debug("refresh attempt", "request_id", requestID)
+
+	err := validateRefreshRequest(req)
+	if writeAuthError(w, requestID, err) {
+		return
+	}
+
+	newAccessToken, newRefreshToken, err := h.TokenService.RefreshToken(r.Context(), req.RefreshToken)
+	if writeAuthError(w, requestID, err) {
+		return
+	}
+	slog.Info("token refreshed", "request_id", requestID)
+
+	resp := dto.LoginResponse{
+		AccessToken:  newAccessToken,
+		RefreshToken: newRefreshToken,
+	}
 	if !encodeJSON(w, http.StatusOK, resp) {
 		return
 	}

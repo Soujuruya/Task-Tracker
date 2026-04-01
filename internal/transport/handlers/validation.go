@@ -64,6 +64,24 @@ func writeAuthError(w http.ResponseWriter, requestID string, err error) bool {
 		http.Error(w, "missing token", http.StatusUnauthorized)
 	case errors.Is(err, domain.ErrGenerateToken):
 		http.Error(w, "failed to generate token", http.StatusInternalServerError)
+	case errors.Is(err, domain.ErrRefreshTokenInvalid):
+		http.Error(w, "invalid refresh token", http.StatusBadRequest)
+	case errors.Is(err, domain.ErrRefreshTokenExpired):
+		http.Error(w, "refresh token expired", http.StatusUnauthorized)
+	case errors.Is(err, domain.ErrRefreshTokenNotFound):
+		http.Error(w, "refresh token not found", http.StatusUnauthorized)
+	case errors.Is(err, domain.ErrRefreshTokenGenerate):
+		http.Error(w, "failed to generate refresh token", http.StatusInternalServerError)
+	case errors.Is(err, domain.ErrRefreshTokenAlreadyExists):
+		http.Error(w, "refresh token already exists", http.StatusConflict)
+	case errors.Is(err, domain.ErrActiveRefreshTokenAlreadyExists):
+		http.Error(w, "active refresh token already exists", http.StatusConflict)
+	case errors.Is(err, domain.ErrRefreshTokenRevoked):
+		http.Error(w, "refresh token revoked", http.StatusUnauthorized)
+	case errors.Is(err, domain.ErrRefreshTokenRotated):
+		http.Error(w, "refresh token rotated", http.StatusUnauthorized)
+	case errors.Is(err, domain.ErrInvalidRefreshTokenState):
+		http.Error(w, "invalid refresh token state", http.StatusInternalServerError)
 	default:
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
@@ -98,4 +116,11 @@ func isInvalidPagination(page, pageSize int) bool {
 		return true
 	}
 	return false
+}
+
+func validateRefreshRequest(req dto.RefreshRequest) error {
+	if req.RefreshToken == "" {
+		return domain.ErrRefreshTokenInvalid
+	}
+	return nil
 }

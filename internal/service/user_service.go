@@ -50,7 +50,7 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 
 	id, err := s.repo.Save(ctx, newUser)
 	if err != nil {
-		if errors.Is(err, domain.ErrUserAlreadyExists) {
+		if domain.IsAuthDomainError(err) {
 			return "", err
 		}
 		return "", fmt.Errorf("failed to save user: %w", err)
