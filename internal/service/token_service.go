@@ -150,6 +150,38 @@ func (t *TokenService) Logout(ctx context.Context, userID string) error {
 	return nil
 }
 
+// Добавлен метод, который собирает три операции вместе для Login
+func (t *TokenService) IssueLoginTokens(ctx context.Context, userID, username string) (string, string, error) {
+	if ctx.Err() != nil {
+		return "", "", ctx.Err()
+	}
+
+	if err := t.Logout(ctx, userID); err != nil {
+		if domain.IsTokenDomainError(err) {
+			return "", "", err
+		}
+		return "", "", fmt.Errorf("failed to revoke previous session: %w", err)
+	}
+
+	accessToken, err := t.GenerateAccessToken(ctx, userID, username)
+	if err != nil {
+		if domain.IsTokenDomainError(err) {
+			return "", "", err
+		}
+		return "", "", fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	refreshToken, err := t.GenerateRefreshToken(ctx, userID, username)
+	if err != nil {
+		if domain.IsTokenDomainError(err) {
+			return "", "", err
+		}
+		return "", "", fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	return accessToken, refreshToken, nil
+}
+
 func (t *TokenService) RefreshToken(ctx context.Context, refreshToken string) (string, string, error) {
 	if ctx.Err() != nil {
 		return "", "", ctx.Err()

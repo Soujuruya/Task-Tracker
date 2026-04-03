@@ -11,6 +11,15 @@ type TaskRepository struct {
 	db map[string]map[string]*domain.Task
 }
 
+// Дополнительный метод, который позвляет передавать копию таски, чтобы сервис не изменял их вне lock секции в map
+func cloneTask(task *domain.Task) *domain.Task {
+	if task == nil {
+		return nil
+	}
+	taskCopy := *task
+	return &taskCopy
+}
+
 func NewTaskRepository() *TaskRepository {
 	return &TaskRepository{
 		db: make(map[string]map[string]*domain.Task),
@@ -24,7 +33,7 @@ func (r *TaskRepository) CreateTask(ctx context.Context, userID string, task *do
 	if r.db[userID] == nil {
 		r.db[userID] = make(map[string]*domain.Task)
 	}
-	r.db[userID][task.ID] = task
+	r.db[userID][task.ID] = cloneTask(task)
 
 	return task.ID, nil
 }
@@ -38,7 +47,7 @@ func (r *TaskRepository) GetTaskByID(ctx context.Context, userID, taskID string)
 		return nil, domain.ErrTaskNotFound
 	}
 
-	return task, nil
+	return cloneTask(task), nil
 }
 
 func (r *TaskRepository) GetListTasks(ctx context.Context, userID string) ([]*domain.Task, error) {
@@ -49,7 +58,7 @@ func (r *TaskRepository) GetListTasks(ctx context.Context, userID string) ([]*do
 
 	tasksSlice := make([]*domain.Task, 0, len(tasks))
 	for _, task := range tasks {
-		tasksSlice = append(tasksSlice, task)
+		tasksSlice = append(tasksSlice, cloneTask(task))
 	}
 	return tasksSlice, nil
 }
@@ -66,9 +75,9 @@ func (r *TaskRepository) UpdateTask(ctx context.Context, userID string, task *do
 		return nil, domain.ErrTaskNotFound
 	}
 
-	r.db[userID][task.ID] = task
+	r.db[userID][task.ID] = cloneTask(task)
 
-	return r.db[userID][task.ID], nil
+	return cloneTask(r.db[userID][task.ID]), nil
 }
 
 func (r *TaskRepository) DeleteTask(ctx context.Context, userID string, taskID string) error {

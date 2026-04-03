@@ -106,17 +106,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Данный Logout как завершение старой сессии при логине
-	err = h.TokenService.Logout(r.Context(), user.ID)
-	if writeAuthError(w, requestID, err) {
-		return
-	}
-
-	signedToken, err := h.TokenService.GenerateAccessToken(r.Context(), user.ID, user.Username)
-	if writeAuthError(w, requestID, err) {
-		return
-	}
-	refreshToken, err := h.TokenService.GenerateRefreshToken(r.Context(), user.ID, user.Username)
+	// Теперь три операции объедены в один метод, чтобы логика не была разбросана по хендлеру
+	signedToken, refreshToken, err := h.TokenService.IssueLoginTokens(r.Context(), user.ID, user.Username)
 	if writeAuthError(w, requestID, err) {
 		return
 	}

@@ -89,8 +89,8 @@ func (h Argon2Hasher) hashPassword(password string) (string, error) {
 
 // Compare Сравнение пароля и хэша
 func (h Argon2Hasher) comparePasswordHash(encodedHash string, password string) error {
-	// Парсим соль и хэш
-	salt, hash, err := decodeHash(encodedHash)
+	// Парсим параметры, соль и хэш
+	params, salt, hash, err := decodeHash(encodedHash)
 	if err != nil {
 		return fmt.Errorf("failed to decode hash: %w", err)
 	}
@@ -99,10 +99,10 @@ func (h Argon2Hasher) comparePasswordHash(encodedHash string, password string) e
 	otherHash := argon2.IDKey(
 		[]byte(password),
 		salt,
-		h.parameters.Iterations,
-		h.parameters.Memory,
-		h.parameters.Parallelism,
-		h.parameters.KeyLength,
+		params.Iterations,
+		params.Memory,
+		params.Parallelism,
+		params.KeyLength,
 	)
 
 	// Сравниваем байты
@@ -124,33 +124,38 @@ func generateRandomBytes(n uint32) ([]byte, error) {
 }
 
 // Декодируем хэш ($argon2id$v=19$m=65536,t=3,p=2$Woo1mErn1s7AHf96ewQ8Uw$D4TzIwGO4XD2buk96qAP+Ed2baMo/KbTRMqXX00wtsU)
-func decodeHash(encodedHash string) (salt, hash []byte, err error) {
+func decodeHash(encodedHash string) (params Argon2Params, salt, hash []byte, err error) {
 	// Разбиваем на пустую строку,argon2id, версию, параметры, соль, хэш
 	vals := strings.Split(encodedHash, "$")
 	if len(vals) != 6 {
-		return nil, nil, ErrInvalidHash
+		return Argon2Params{}, nil, nil, ErrInvalidHash
 	}
 
 	// Проверяем версию алгоритма
 	// Если хэш создан старой версией Argon2, то ошибка
 	var version int
 	if _, err = fmt.Sscanf(vals[2], "v=%d", &version); err != nil {
-		return nil, nil, err
+		return Argon2Params{}, nil, nil, err
 	}
 	if version != argon2.Version {
-		return nil, nil, ErrIncompatibleVersion
+		return Argon2Params{}, nil, nil, ErrIncompatibleVersion
+	}
+	// Теперь парсим параметры из самого хэша
+	if _, err = fmt.Sscanf(vals[3], "m=%d,t=%d,p=%d", &params.Memory, &params.Iterations, &params.Parallelism); err != nil {
+		return Argon2Params{}, nil, nil, fmt.Errorf("failed to parse hash parameters: %w", err)
 	}
 
 	// Декодируем соль
 	salt, err = base64.RawStdEncoding.Strict().DecodeString(vals[4])
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to decode salt: %w", err)
+		return Argon2Params{}, nil, nil, fmt.Errorf("failed to decode salt: %w", err)
 	}
 	// Декодируем хэш
 	hash, err = base64.RawStdEncoding.Strict().DecodeString(vals[5])
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to decode hash: %w", err)
+		return Argon2Params{}, nil, nil, fmt.Errorf("failed to decode hash: %w", err)
 	}
+	params.KeyLength = uint32(len(hash)) // длина ключа берется также из хэша
 
-	return salt, hash, nil
+	return params, salt, hash, nil
 }
