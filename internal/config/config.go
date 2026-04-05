@@ -15,6 +15,7 @@ type Config struct {
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
 	HashParameters
+	RateLimiterConfig
 }
 
 // HashParameters Отдельная структура под параметры
@@ -27,11 +28,17 @@ type HashParameters struct {
 	MaxConcurrency uint   // кол-во одновременных хэширований на сервере
 }
 
+type RateLimiterConfig struct {
+	MaxRequests int
+	WindowSize  time.Duration
+}
+
 func LoadConfig() Config {
 	env := os.Getenv("ENVIRONMENT")
 	isDev := env == "development"
 
 	hashParameters := parseArgon2HashParameters(isDev)
+	rateLimiterConfig := parseRateLimiterConfig(isDev)
 
 	addr := os.Getenv("AUTH_SERVICE_ADDR")
 	if addr == "" {
@@ -72,12 +79,13 @@ func LoadConfig() Config {
 		log.Fatal("REFRESH_TOKEN_TTL is invalid")
 	}
 	return Config{
-		ENV:             env,
-		Addr:            addr,
-		JwtSecret:       secretKey,
-		AccessTokenTTL:  accessTokenTTL,
-		RefreshTokenTTL: refreshTokenTTL,
-		HashParameters:  hashParameters,
+		ENV:               env,
+		Addr:              addr,
+		JwtSecret:         secretKey,
+		AccessTokenTTL:    accessTokenTTL,
+		RefreshTokenTTL:   refreshTokenTTL,
+		HashParameters:    hashParameters,
+		RateLimiterConfig: rateLimiterConfig,
 	}
 }
 
@@ -135,6 +143,36 @@ func parseArgon2HashParameters(isDev bool) HashParameters {
 	}
 }
 
+func parseRateLimiterConfig(isDev bool) RateLimiterConfig {
+	maxRequestsStr := os.Getenv("RATE_LIMIT_MAX_REQUESTS")
+	if maxRequestsStr == "" {
+		if !isDev {
+			log.Fatal("RATE_LIMIT_MAX_REQUESTS is required")
+		}
+		maxRequestsStr = "10"
+	}
+	maxRequests, err := strconv.Atoi(maxRequestsStr)
+	if err != nil {
+		log.Fatal("RATE_LIMIT_MAX_REQUESTS is invalid")
+	}
+
+	windowSizeStr := os.Getenv("RATE_LIMIT_WINDOW_SIZE")
+	if windowSizeStr == "" {
+		if !isDev {
+			log.Fatal("RATE_LIMIT_WINDOW_SIZE is required")
+		}
+		windowSizeStr = "1m"
+	}
+	windowSize, err := time.ParseDuration(windowSizeStr)
+	if err != nil {
+		log.Fatal("RATE_LIMIT_WINDOW_SIZE is invalid")
+	}
+
+	return RateLimiterConfig{
+		MaxRequests: maxRequests,
+		WindowSize:  windowSize,
+	}
+}
 func parseUint32(val string) uint32 {
 	n, err := strconv.ParseUint(val, 10, 32)
 	if err != nil {

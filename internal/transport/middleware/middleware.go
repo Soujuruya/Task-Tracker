@@ -12,7 +12,7 @@ func ValidateTokenMiddleware(validator AccessTokenValidator) func(http.Handler) 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			requestID, _ := r.Context().Value(ctxkeys.RequestIDKey).(string)
+			requestID := getRequestID(r)
 
 			token, err := parseBearerToken(r)
 			if err != nil {
@@ -37,6 +37,27 @@ func ValidateTokenMiddleware(validator AccessTokenValidator) func(http.Handler) 
 			slog.Debug("token validated successfully", "request_id", requestID, "user_id", validatedTokenClaims.UserID)
 			ctx := context.WithValue(r.Context(), ctxkeys.UserIDKey, validatedTokenClaims.UserID)
 			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestID := getRequestID(r)
+			key, err := makeRateLimitKey(r)
+			if err != nil {
+				slog.Error("failed to build rate limit key", "request_id", requestID, "error", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+			isAllowed := limiter.AllowRequest(key)
+			if !isAllowed {
+				slog.Warn("rate limit exceeded", "request_id", requestID, "method", r.Method, "path", r.URL.Path)
+				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+				return
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }

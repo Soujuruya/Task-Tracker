@@ -18,6 +18,7 @@ import (
 	"task-tracker-1/internal/service"
 	"task-tracker-1/internal/transport"
 	"task-tracker-1/internal/transport/handlers"
+	"task-tracker-1/internal/transport/middleware"
 	"time"
 )
 
@@ -43,6 +44,16 @@ func NewApp(cfg *config.Config) *App {
 		MaxConcurrency: cfg.MaxConcurrency,
 	})
 	sha256Hasher := hasher.NewSha256Hash()
+	// Инициализируем rate limiter и конфиг для него
+	rateLimitConfig := middleware.RateLimitConfig{
+		MaxRequests: cfg.MaxRequests,
+		WindowSize:  cfg.WindowSize,
+	}
+
+	rateLimiter, err := middleware.NewRateLimiter(rateLimitConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
 	// Инициализируем сервисы
 	authService := service.NewAuthService(userRepo, argon2Hashes)
 	taskService := service.NewTaskService(taskRepo, auditLogRepo)
@@ -51,7 +62,7 @@ func NewApp(cfg *config.Config) *App {
 	authHandler := handlers.NewAuthHandler(authService, tokenService)
 	taskHandler := handlers.NewTaskHandler(taskService)
 	// Инициализируем http-сервер
-	server := transport.NewServer(authHandler, taskHandler, tokenService, cfg.Addr)
+	server := transport.NewServer(authHandler, taskHandler, tokenService, rateLimiter, cfg.Addr)
 
 	return &App{
 		server: server,

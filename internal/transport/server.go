@@ -12,13 +12,17 @@ type Server struct {
 	httpServer *http.Server
 }
 
-func NewServer(authHandler *handlers.AuthHandler, taskHandler *handlers.TaskHandler, tokenValidator middleware.AccessTokenValidator, addr string) *Server {
+func NewServer(authHandler *handlers.AuthHandler, taskHandler *handlers.TaskHandler, tokenValidator middleware.AccessTokenValidator, rateLimiter *middleware.RateLimiter, addr string) *Server {
 	mux := http.NewServeMux()
 	//Auth-service
 	//Открытые роуты
-	mux.HandleFunc("POST /register", authHandler.Register)
-	mux.HandleFunc("POST /login", authHandler.Login)
-	mux.HandleFunc("POST /refresh", authHandler.Refresh)
+	// Инициализируем Rate Limiter Middleware
+	rateLimiterMiddleware := middleware.RateLimitMiddleware(rateLimiter)
+	// Оборачиаем нужные роуты
+	mux.Handle("POST /login", rateLimiterMiddleware(http.HandlerFunc(authHandler.Login)))
+	mux.Handle("POST /refresh", rateLimiterMiddleware(http.HandlerFunc(authHandler.Refresh)))
+	mux.Handle("POST /register", rateLimiterMiddleware(http.HandlerFunc(authHandler.Register)))
+	// Не трогаем
 	mux.HandleFunc("GET /validate", authHandler.ValidateToken)
 
 	handler := middleware.RequestIDMiddleware(middleware.RequestLoggerMiddleware(mux))
