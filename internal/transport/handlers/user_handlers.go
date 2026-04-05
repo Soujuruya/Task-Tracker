@@ -19,13 +19,8 @@ func NewAuthHandler(authService *service.AuthService, tokenService *service.Toke
 	}
 }
 
-// ValidateToken Валидация токена (внутренний эндпоинт)
+// ValidateToken Валидация токена (внутренний эндпоинт), метод GET, так как эндпоинт используется для валидации токена без изменения его состояния
 func (h *AuthHandler) ValidateToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		slog.Warn("AuthService.Handlers.ValidateToken: method not allowed", "method", r.Method)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	requestID := getRequestID(r)
 
 	token, err := parseBearerToken(r)

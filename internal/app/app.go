@@ -51,7 +51,7 @@ func NewApp(cfg *config.Config) *App {
 	authHandler := handlers.NewAuthHandler(authService, tokenService)
 	taskHandler := handlers.NewTaskHandler(taskService)
 	// Инициализируем http-сервер
-	server := transport.NewServer(authHandler, taskHandler, cfg.Addr, cfg.AuthServiceHost)
+	server := transport.NewServer(authHandler, taskHandler, tokenService, cfg.Addr)
 
 	return &App{
 		server: server,

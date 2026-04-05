@@ -2,61 +2,40 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strings"
 	"task-tracker-1/internal/pkg"
 	"task-tracker-1/internal/pkg/ctxkeys"
-	"task-tracker-1/internal/transport/dto"
-	"time"
 )
 
-var httpClient = &http.Client{Timeout: 3 * time.Second}
-
-func ValidateTokenMiddleware(authServiceURl string) func(http.Handler) http.Handler {
+func ValidateTokenMiddleware(validator AccessTokenValidator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			tokenString := r.Header.Get("Authorization")
-			token := strings.TrimPrefix(tokenString, "Bearer ")
-			if token == "" {
-				http.Error(w, "missing token", http.StatusUnauthorized)
-				return
-			}
+			requestID, _ := r.Context().Value(ctxkeys.RequestIDKey).(string)
 
-			req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, authServiceURl+"/validate", nil)
+			token, err := parseBearerToken(r)
 			if err != nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
+				slog.Warn("authorization header is invalid", "request_id", requestID)
+				http.Error(w, "invalid authorization header", http.StatusUnauthorized)
 				return
 			}
-			req.Header.Set("Authorization", "Bearer "+token)
 
-			resp, err := httpClient.Do(req)
+			validatedTokenClaims, err := validator.ValidateAccessToken(r.Context(), token)
 			if err != nil {
-				http.Error(w, "auth service unavailable", http.StatusInternalServerError)
-				return
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				http.Error(w, "validation failed", http.StatusUnauthorized)
+				slog.Warn("token validation failed", "request_id", requestID, "error", err)
+				http.Error(w, "invalid token", http.StatusUnauthorized)
 				return
 			}
 
-			var validateResponse dto.ValidateTokenResponse
-
-			if err := json.NewDecoder(resp.Body).Decode(&validateResponse); err != nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
+			if validatedTokenClaims.UserID == "" {
+				slog.Warn("token validation returned empty user_id", "request_id", requestID)
+				http.Error(w, "invalid token", http.StatusUnauthorized)
 				return
 			}
 
-			if validateResponse.UserID == "" {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), ctxkeys.UserIDKey, validateResponse.UserID)
+			slog.Debug("token validated successfully", "request_id", requestID, "user_id", validatedTokenClaims.UserID)
+			ctx := context.WithValue(r.Context(), ctxkeys.UserIDKey, validatedTokenClaims.UserID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
