@@ -1,15 +1,13 @@
 package pkg
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
+	"github.com/google/uuid"
 )
 
 func GenerateID() (string, error) {
-	key := make([]byte, 16)
-	if _, err := rand.Read(key); err != nil {
-		return "", fmt.Errorf("failed to generate ID: %w", err)
+	id, err := uuid.NewV7()
+	if err != nil {
+		return "", err
 	}
-	return hex.EncodeToString(key), nil
+	return id.String(), nil
 }
