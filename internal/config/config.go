@@ -14,8 +14,10 @@ type Config struct {
 	JwtSecret       []byte
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
+
 	HashParameters
 	RateLimiterConfig
+	StorageConfig
 }
 
 // HashParameters Отдельная структура под параметры
@@ -31,6 +33,11 @@ type HashParameters struct {
 type RateLimiterConfig struct {
 	MaxRequests int
 	WindowSize  time.Duration
+}
+
+type StorageConfig struct {
+	StorageType string
+	PostgresDSN string
 }
 
 func LoadConfig() Config {
@@ -70,6 +77,7 @@ func LoadConfig() Config {
 		}
 		refreshTokenTTLStr = "168h"
 	}
+
 	accessTokenTTL, err := time.ParseDuration(accessTokenTTLStr)
 	if err != nil {
 		log.Fatal("ACCESS_TOKEN_TTL is invalid")
@@ -78,6 +86,9 @@ func LoadConfig() Config {
 	if err != nil {
 		log.Fatal("REFRESH_TOKEN_TTL is invalid")
 	}
+
+	storageConfig := parseStorageConfig(isDev)
+
 	return Config{
 		ENV:               env,
 		Addr:              addr,
@@ -86,6 +97,40 @@ func LoadConfig() Config {
 		RefreshTokenTTL:   refreshTokenTTL,
 		HashParameters:    hashParameters,
 		RateLimiterConfig: rateLimiterConfig,
+		StorageConfig:     storageConfig,
+	}
+}
+
+// Функция парсинга параметров хранения данных
+func parseStorageConfig(isDev bool) StorageConfig {
+	storageType := os.Getenv("STORAGE_TYPE")
+	if storageType == "" {
+		if !isDev {
+			log.Fatal("STORAGE_TYPE is required")
+		}
+		storageType = "memory"
+	}
+
+	switch storageType {
+	case "memory", "postgres":
+	default:
+		log.Fatal("STORAGE_TYPE must be either memory or postgres")
+	}
+
+	postgresDSN := ""
+	if storageType == "postgres" {
+		postgresDSN = os.Getenv("POSTGRES_DSN")
+		if postgresDSN == "" {
+			if !isDev {
+				log.Fatal("POSTGRES_DSN is required")
+			}
+			postgresDSN = "postgres://user:password@localhost:5432/task_tracker?sslmode=disable"
+		}
+	}
+
+	return StorageConfig{
+		StorageType: storageType,
+		PostgresDSN: postgresDSN,
 	}
 }
 

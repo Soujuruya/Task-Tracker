@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"syscall"
 	"task-tracker-1/internal/config"
 	"task-tracker-1/internal/pkg/hasher"
+	"task-tracker-1/internal/repository"
 	"task-tracker-1/internal/repository/auditlog"
 	"task-tracker-1/internal/repository/refresh_token"
 	"task-tracker-1/internal/repository/task"
@@ -20,18 +22,32 @@ import (
 	"task-tracker-1/internal/transport/handlers"
 	"task-tracker-1/internal/transport/middleware"
 	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // Вынес сбор всех зависимостей из main, так как уже main сильно разросся
 type App struct {
-	server  *transport.Server
-	cleanup func(ctx context.Context) error
+	server   *transport.Server
+	cleanup  func(ctx context.Context) error
+	shutdown func(ctx context.Context) error
+}
+
+type StorageDeps struct {
+	UserRepo repository.UserRepo
+	TaskRepo repository.TaskRepo
+	Close    func(ctx context.Context) error
 }
 
 func NewApp(cfg *config.Config) *App {
+	startAppCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	// Инициализируем репозитории
-	userRepo := user.NewUserRepository()
-	taskRepo := task.NewTaskRepository()
+	storages, err := storageSwitcher(startAppCtx, cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	auditLogRepo := auditlog.NewAuditLogRepository()
 	refreshRepo := refresh_token.NewRefreshRepository()
 	// Инициализируем хэшер
@@ -55,8 +71,8 @@ func NewApp(cfg *config.Config) *App {
 		log.Fatal(err)
 	}
 	// Инициализируем сервисы
-	authService := service.NewAuthService(userRepo, argon2Hashes)
-	taskService := service.NewTaskService(taskRepo, auditLogRepo)
+	authService := service.NewAuthService(storages.UserRepo, argon2Hashes)
+	taskService := service.NewTaskService(storages.TaskRepo, auditLogRepo)
 	tokenService := service.NewTokenService(cfg.JwtSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL, refreshRepo, sha256Hasher)
 	// Инициализируем хендлеры
 	authHandler := handlers.NewAuthHandler(authService, tokenService)
@@ -68,6 +84,9 @@ func NewApp(cfg *config.Config) *App {
 		server: server,
 		cleanup: func(ctx context.Context) error {
 			return refreshRepo.CleanInvalidTokens(ctx, time.Now())
+		},
+		shutdown: func(ctx context.Context) error {
+			return storages.Close(ctx)
 		},
 	}
 }
@@ -119,7 +138,52 @@ func (app *App) Start() error {
 		return err
 	}
 
+	if err := app.shutdown(shutdownCtx); err != nil {
+		return err
+	}
+
 	log.Println("shutting down gracefully")
 
 	return nil
+}
+
+func storageSwitcher(ctx context.Context, cfg *config.Config) (*StorageDeps, error) {
+	switch cfg.StorageType {
+	case "memory":
+		userRepo := user.NewMemoryUserRepository()
+		taskRepo := task.NewMemoryTaskRepository()
+
+		return &StorageDeps{
+			UserRepo: userRepo,
+			TaskRepo: taskRepo,
+			Close: func(ctx context.Context) error {
+				return nil
+			},
+		}, nil
+
+	case "postgres":
+		db, err := sql.Open("pgx", cfg.PostgresDSN)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := db.PingContext(ctx); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+
+		userRepo := user.NewPostgresUserRepository(db)
+		taskRepo := task.NewPostgresTaskRepository(db)
+
+		return &StorageDeps{
+			UserRepo: userRepo,
+			TaskRepo: taskRepo,
+			Close: func(ctx context.Context) error {
+				return db.Close()
+			},
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported storage type: %s", cfg.StorageType)
+	}
 }

@@ -6,7 +6,7 @@ import (
 	"task-tracker-1/internal/domain"
 )
 
-type TaskRepository struct {
+type MemoryTaskRepository struct {
 	mu sync.RWMutex
 	db map[string]map[string]*domain.Task
 }
@@ -20,13 +20,13 @@ func cloneTask(task *domain.Task) *domain.Task {
 	return &taskCopy
 }
 
-func NewTaskRepository() *TaskRepository {
-	return &TaskRepository{
+func NewMemoryTaskRepository() *MemoryTaskRepository {
+	return &MemoryTaskRepository{
 		db: make(map[string]map[string]*domain.Task),
 	}
 }
 
-func (r *TaskRepository) CreateTask(ctx context.Context, userID string, task *domain.Task) (string, error) {
+func (r *MemoryTaskRepository) CreateTask(ctx context.Context, userID string, task *domain.Task) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -38,7 +38,7 @@ func (r *TaskRepository) CreateTask(ctx context.Context, userID string, task *do
 	return task.ID, nil
 }
 
-func (r *TaskRepository) GetTaskByID(ctx context.Context, userID, taskID string) (*domain.Task, error) {
+func (r *MemoryTaskRepository) GetTaskByID(ctx context.Context, userID, taskID string) (*domain.Task, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -50,7 +50,7 @@ func (r *TaskRepository) GetTaskByID(ctx context.Context, userID, taskID string)
 	return cloneTask(task), nil
 }
 
-func (r *TaskRepository) GetListTasks(ctx context.Context, userID string) ([]*domain.Task, error) {
+func (r *MemoryTaskRepository) GetListTasks(ctx context.Context, userID string) ([]*domain.Task, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -63,7 +63,7 @@ func (r *TaskRepository) GetListTasks(ctx context.Context, userID string) ([]*do
 	return tasksSlice, nil
 }
 
-func (r *TaskRepository) UpdateTask(ctx context.Context, userID string, task *domain.Task) (*domain.Task, error) {
+func (r *MemoryTaskRepository) UpdateTask(ctx context.Context, userID string, task *domain.Task) (*domain.Task, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -80,7 +80,7 @@ func (r *TaskRepository) UpdateTask(ctx context.Context, userID string, task *do
 	return cloneTask(r.db[userID][task.ID]), nil
 }
 
-func (r *TaskRepository) DeleteTask(ctx context.Context, userID string, taskID string) error {
+func (r *MemoryTaskRepository) DeleteTask(ctx context.Context, userID string, taskID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

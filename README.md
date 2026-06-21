@@ -330,7 +330,6 @@ curl -X POST http://localhost:8080/refresh \
 - Добавить HTTPS/TLS termination на уровне reverse proxy или сервера.
 - Добавить CORS/security headers при появлении frontend-клиента.
 - Добавить `golangci-lint`, `govulncheck` и CI.
-- Добавить unit и integration tests.
 
 ## Проверка проекта
 
@@ -365,7 +364,6 @@ govulncheck ./...
 
 - PostgreSQL-хранилище для refresh-токенов;
 - PostgreSQL-хранилище для audit log;
-- автоматические тесты;
 - GitHub Actions;
 - OpenAPI-спецификация.
 

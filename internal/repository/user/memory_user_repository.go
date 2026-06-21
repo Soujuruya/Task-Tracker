@@ -6,21 +6,21 @@ import (
 	"task-tracker-1/internal/domain"
 )
 
-type UserRepository struct {
+type MemoryUserRepository struct {
 	mu          sync.RWMutex
 	db          map[string]domain.User
 	usernameIdx map[string]string
 }
 
-func NewUserRepository() *UserRepository {
-	return &UserRepository{
+func NewMemoryUserRepository() *MemoryUserRepository {
+	return &MemoryUserRepository{
 		db:          map[string]domain.User{},
 		usernameIdx: map[string]string{},
 	}
 }
 
 // Save Сохранение пользователя
-func (r *UserRepository) Save(ctx context.Context, user domain.User) (string, error) {
+func (r *MemoryUserRepository) Save(ctx context.Context, user domain.User) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -37,7 +37,7 @@ func (r *UserRepository) Save(ctx context.Context, user domain.User) (string, er
 }
 
 // GetByUsername Получение юзера по username для логина
-func (r *UserRepository) GetByUsername(ctx context.Context, username string) (domain.User, error) {
+func (r *MemoryUserRepository) GetByUsername(ctx context.Context, username string) (domain.User, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
