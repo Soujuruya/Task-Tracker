@@ -1,380 +1,371 @@
 # Task Tracker
 
-# Запуск проекта
-- Клонируем репозиторий и подключаем все зависимости.
-- Решил добавить простой Makefile для запуска проекта.
-- Переходим в директорию auth-service и после выполняем команду:
+[![Go Version](https://img.shields.io/github/go-mod/go-version/Soujuruya/Task-Tracker)](https://go.dev/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Soujuruya/Task-Tracker)](https://goreportcard.com/report/github.com/Soujuruya/Task-Tracker)
+
+Task Tracker - HTTP API на Go для регистрации пользователей, выдачи JWT/refresh-токенов и управления задачами. Проект сделан как учебный backend-сервис с разделением на слои, доменной логикой, in-memory и PostgreSQL-хранилищем, graceful shutdown и базовыми security-практиками.
+
+## Что показывает проект
+
+- Проектирование HTTP API на стандартной библиотеке Go.
+- Разделение кода на `transport`, `service`, `repository`, `domain`.
+- Авторизация через access JWT и refresh-token rotation.
+- Безопасное хранение паролей через Argon2id с настраиваемыми параметрами.
+- Хранение refresh-токенов в виде SHA-256 хэшей.
+- Работа с PostgreSQL через `database/sql` и `pgx` driver.
+- Параметризованные SQL-запросы без конкатенации пользовательского ввода.
+- In-memory репозитории с `sync.RWMutex` для локального запуска и тестирования идей.
+- Graceful shutdown HTTP-сервера.
+- Rate limiting для публичных auth-эндпоинтов.
+- Пагинация, фильтрация и сортировка задач.
+- Доменная state machine для статусов задач.
+- Audit log изменений задач на уровне сервиса.
+- Конфигурация через переменные окружения.
+
+## Быстрый старт
+
+### Требования
+
+- Go 1.25+
+- Make
+- PostgreSQL, если используется `STORAGE_TYPE=postgres`
+- `psql`, если запускаются миграции через Makefile
+
+### Настройка окружения
+
+Создайте `.env` на основе `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+Минимальный вариант для запуска без PostgreSQL:
+
+```bash
+export ENVIRONMENT=development
+export AUTH_SERVICE_ADDR=:8080
+export JWT_SECRET=dev_secret
+export ACCESS_TOKEN_TTL=30m
+export REFRESH_TOKEN_TTL=48h
+
+export MEMORY=64
+export ITERATIONS=3
+export PARALLELISM=2
+export SALT_LENGTH=16
+export KEY_LENGTH=32
+export MAX_CONCURRENCY=12
+
+export RATE_LIMIT_MAX_REQUESTS=10
+export RATE_LIMIT_WINDOW_SIZE=1m
+
+export STORAGE_TYPE=memory
+```
+
+Для PostgreSQL:
+
+```bash
+export STORAGE_TYPE=postgres
+export POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:5432/task_tracker?sslmode=disable
+```
+
+### Запуск
 
 ```bash
 make run
 ```
 
-# Основные моменты
+Или напрямую:
 
-## Auth-service
-
-Я пытался реализовать минимально рабочую версию сервиса,следуя ТЗ и используя стандартную библиотеку языка Go,за исключением сторонней библиотеки для работы с JWT токенами.
-
-### Сущности
-В роли сущности выступает User. Для MVP подобрал минимально кол-во полей в структуре для работы сервиса.
-
-```go
-type User struct {
-	ID           string 
-	Username     string 
-	PasswordHash string 
-}
+```bash
+source .env
+go run ./cmd
 ```
 
-В базе данных храним хеш пароля для безопасности.
-При проверке введенного пароля сравнивается хеш введенного пароля с тем что у нас в базе.
+### Миграции PostgreSQL
 
-### База данных(in-memory)
-По ТЗ нужно было использовать временное хранилище данных,соответсвенно я использовал map,как более удобный и простой вариант для реализации.
-```go
-map[string]entity.User
+```bash
+make migrate-up
 ```
-Так же использовал RWMutex для синхронизации, так как map в Go не потокобезопасна.
-Реализовал только нужные для моей реализации методы.
 
-### Сервисный слой
+Откат:
 
-Здесь получается основная бизнес-логика с вызовом методов репозитория. Добавил сюда операцию хеширование пароля для дальнейшего сохранения в БД, а также генерацию ID пользователя.
-
-С генерацией ID было два варианта: использовать генератор или просто счётчик. Остановился на первом варианте,так он мне показался более рациональным для создания ID и более подходящим под структуру. Оформил его как функцию, которую вызываю в методе регистрации.
-
-### Транспортный слой
-#### Handlers
-Для MVP решил не выносить реализацию проверки и генерации токена в отдельную директорию.
-Также в этом слое прологгировал основные события,чтобы понимать вообще,где неисправность и выполняется ли цепочка в целом.
-
-Значит у меня три хендлера: регистрация, аутентификация и валидация токена.
-
-Первые два вызывают методы сервиса, последний основан только на логике того,что мы проверяем валидность токена и никак не взаимодействуем с сервисом.
-
-При регистрации и аутентификации мы валидируем данные,которые нам пришли,чтобы не пустить дальше пустой пароль или логин.
-
-По моей реализации, когда пользователь проходит регистрацию, ему не выдают токен. Это происходит после аутентификации. Мне показалось это наиболее правильным решением, так как многие auth-системы так устроены.
-В целом это нужно для того,чтобы не было злоумышленных пустых регистраций и чтобы проверить верность введенных данных пользователем. После проверки он может пройти аутентификацию,где и получает токен.
-
-В хендлере аутентификации я с помощью инструментов JWT-библиотеки получаю токен,подписываю его с помощью secret-key и выдаю пользователю.
-
-Валидация токена реализована как внутренний эндпоинт,который будет использоваться для проверки валидности токена для других сервисов.
-Здесь мы также с помощью jwt-библиотеки подлинность токена и не закончился ли его срок действия.
-
-#### Роутинг и запуск HTTP-сервера
-Решил вынести в отдельный файл,чтобы сильно не захламлять main.
-Здесь мы просто конфигурируем  наш сервер, регистрируем хенделеры.
-Реализовал технологию безопасного завершения работы сервера Graceful Shutdown.
-
-### Обработка ошибок
-Решил пробрасывать ошибки выше с контекстом о ней, чтобы логика их обработки была понятнее. Общие ошибки вынес в отдельный файл,чтобы каждый раз не тянуть их из слоя ниже. 
-
-### Конфигурация
-Реализовал чтение переменных окружения их env-файла. Вынес в отдельную фукнцию логику работу с ними. В дальнейшем планирую переходить на использование нормального конфига.
-
-## Task-Service
-
-Реализована основаня логика управления задачами, интегрированная с Auth-Service.
-
-## Сушность Task
-
-```go
-type Task struct {
-	ID             string 
-	Title          string
-	Description    string
-	ProgressStatus ProgressStatus
-	CreatedAt      time.Time
-}
+```bash
+make migrate-down
 ```
-* ID : уникальный идентификатор задачи
-* Title : название задачи
-* Description: описание задачи
-* ProgressStatus : прогресс выполнения задачи
-* CreatedAt: дата создания
 
-Статус реализовал в виде отдельного типа. 
+## Архитектура
 
-- StatusToDo : задача ждет выполнения
+```text
+cmd/
+  main.go                         # точка входа
 
-- StatusInProgress : задача в работе
+internal/
+  app/                            # сборка зависимостей и запуск приложения
+  config/                         # чтение env-конфигурации
+  domain/                         # доменные модели, статусы, ошибки
+  service/                        # бизнес-логика auth, tokens, tasks
+  repository/                     # интерфейсы и реализации хранилищ
+    user/
+    task/
+    refresh_token/
+    auditlog/
+  transport/                      # HTTP server, handlers, middleware, DTO
+  pkg/                            # вспомогательные пакеты: hasher, logger, ctx keys
 
-- StatusDone : задача выполнена
+migrations/                       # SQL-миграции PostgreSQL
+```
 
-Это защищает от передачи невалидных значений.
+Основная идея: HTTP-слой отвечает за запросы, ответы и middleware; сервисный слой содержит правила приложения; репозитории скрывают детали хранения; доменный слой содержит модели и ошибки.
 
-## Слой репозитория
+## API
 
-Реализовал in-memory хранение в виде двухуровневой мапы ```map[string]map[string]*domain.Task``` по ключам user_id и task_id.
+По умолчанию сервис слушает `:8080`.
 
-Был вариант сделать слайс вместо второй мапы, но так как операции, такие как удаление и поиск занимают больше времени, я предпочел использовать свой вариант. 
-Тем более в моей реализации мы в частности работаем с конкретным taskID.
+### Auth
 
-Также добавил синхронизацию с помощью мьютексов.
+| Method | Path | Auth | Описание |
+| --- | --- | --- | --- |
+| `POST` | `/register` | no | Регистрация пользователя |
+| `POST` | `/login` | no | Получение access и refresh токена |
+| `POST` | `/refresh` | no | Ротация refresh-токена и выдача новой пары токенов |
+| `POST` | `/logout` | yes | Отзыв активной refresh-сессии пользователя |
+| `GET` | `/validate` | bearer | Проверка access-токена |
 
-## Сервисный слой
-Здесь я описал основные бизнесовые правила для управления задачами.
+### Tasks
 
-Использую интерфейс в Service, чтобы потом было легче подменить БД.
+| Method | Path | Auth | Описание |
+| --- | --- | --- | --- |
+| `POST` | `/tasks` | yes | Создать задачу |
+| `GET` | `/tasks` | yes | Получить список задач |
+| `PUT` | `/tasks/{id}` | yes | Частично обновить задачу |
+| `DELETE` | `/tasks/{id}` | yes | Удалить задачу |
+| `GET` | `/tasks/{id}/history` | yes | Получить историю изменений задачи |
 
-### CreateTask
+Авторизация передается через заголовок:
 
-- Валидирует обязательное поле Title
-- Если статус не передан - выставляет todo по умолчанию
-- Генерирует ID и подставляет время создания CreatedAt
+```http
+Authorization: Bearer <access_token>
+```
 
-### GetListTasks
+## Примеры запросов
 
-* Возвращает задачи пользователя, отсортированные по дате создания (новые первые).
+### Регистрация
 
-Посчитал более логичным вариантом.
+```bash
+curl -X POST http://localhost:8080/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "demo",
+    "password": "password123"
+  }'
+```
 
-### UpdateTask
+Ответ:
 
-* Принимает UpdateTaskInput с указателями на поля - обновляются только переданные поля
-* Логика переходов статусов: из Done нельзя вернуться назад
-
-### DeleteTask
-
-Задачу со статусом Done удалить нельзя
-
-## Транспортный слой 
-
-userID извлекается из контекста через middleware — все эндпоинты требуют авторизации.
-Понимаю, что есть риски. Но попытался обезопасить систему, сделав типизированный ключ и проверку валидности.
-
-- | POST | /tasks | Создать задачу |
-- | GET  | /tasks | Получить список задач | 
-- | PUT  | /tasks/{id} | Обновить задачу |
-- | DELETE | /tasks/{id} | Удалить задачу |
-
-У меня метод PUT, работает как PATCH. Но логика реализации соответсвует и в том и в другом случае.
-
-### Middleware
-
-ValidateTokenMiddleware - middleware для валидации JWT-токена через внешний Auth-Service.
-
-У меня был вариант проверять токен локально,но понял,что это добавит зависимости между двумя сервисами.
-
-А так же мой вариант, где я извлекаю токен из заголовка,делаю запрос на /validate из auth-service,далее при успешной валидации кладу в контекст user_id и беру его уже в хендлерах через контекст. 
-
-# Тестирование
-
-Проверял через Postman
-
-Вот конфиг коллекции:
 ```json
 {
-  "info": {
-    "_postman_id": "bedad89a-d509-4bae-b866-1010c5b8df8e",
-    "name": "task-tracker",
-    "schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
-    "_exporter_id": "26085175"
-  },
-  "item": [
-    {
-      "name": "Auth",
-      "item": [
-        {
-          "name": "login",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const resp = pm.response.json();",
-                  "pm.environment.set(\"access_token\", resp.access_token);"
-                ],
-                "type": "text/javascript",
-                "packages": {},
-                "requests": {}
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"test user\",\n  \"password\": \"password123\"\n}\n",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "http://localhost:8080/login"
-          },
-          "response": []
-        },
-        {
-          "name": "register",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"username\": \"test user\",\n    \"password\": \"password123\"\n}\n",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "http://localhost:8080/register"
-          },
-          "response": []
-        },
-        {
-          "name": "validate",
-          "request": {
-            "auth": {
-              "type": "jwt",
-              "jwt": {
-                "algorithm": "HS256",
-                "isSecretBase64Encoded": false,
-                "payload": "{}",
-                "addTokenTo": "header",
-                "headerPrefix": "Bearer",
-                "queryParamKey": "token",
-                "header": "{}"
-              }
-            },
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "http://localhost:8080/validate?=",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "validate"
-              ],
-              "query": [
-                {
-                  "key": "",
-                  "value": ""
-                }
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Tasks",
-      "item": [
-        {
-          "name": "createTask",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"title\": \"test title\",\n    \"description\": \"blablabla\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "http://localhost:8080/tasks"
-          },
-          "response": []
-        },
-        {
-          "name": "getListTasks",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}",
-                "type": "text"
-              }
-            ],
-            "url": "http://localhost:8080/tasks"
-          },
-          "response": []
-        },
-        {
-          "name": "updateTask",
-          "request": {
-            "auth": {
-              "type": "jwt",
-              "jwt": {
-                "algorithm": "HS256",
-                "isSecretBase64Encoded": false,
-                "payload": "{}",
-                "addTokenTo": "header",
-                "headerPrefix": "Bearer",
-                "queryParamKey": "token",
-                "header": "{}"
-              }
-            },
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"title\": \"new title\",\n    \"description\": \"new blablabla\",\n    \"progress_status\": \"in_progress\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "http://localhost:8080/tasks/4a12a324ee63808357f4304155d91952"
-          },
-          "response": []
-        },
-        {
-          "name": "deleteTask",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}",
-                "type": "text"
-              }
-            ],
-            "url": "http://localhost:8080/tasks/4a12a324ee63808357f4304155d91952"
-          },
-          "response": []
-        }
-      ]
-    }
-  ]
+  "user_id": "019..."
 }
 ```
 
-# ToDo
+### Логин
 
-* Пока в планах реализовать технологию, позволяющую запустить изначально Auth-Service, а потом уже Task-Service.
-* Добавить логгирование нормальное и конфиг переписать.
+```bash
+curl -X POST http://localhost:8080/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "demo",
+    "password": "password123"
+  }'
+```
 
+Ответ:
 
+```json
+{
+  "access_token": "<jwt>",
+  "refresh_token": "<refresh_token>"
+}
+```
 
+### Создание задачи
+
+```bash
+curl -X POST http://localhost:8080/tasks \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  -d '{
+    "title": "Read Go docs",
+    "description": "Review net/http and context packages",
+    "progress_status": "todo"
+  }'
+```
+
+Ответ:
+
+```json
+{
+  "id": "019...",
+  "title": "Read Go docs",
+  "description": "Review net/http and context packages",
+  "progress_status": "todo",
+  "created_at": "2026-06-22T10:00:00Z"
+}
+```
+
+### Получение списка задач
+
+```bash
+curl "http://localhost:8080/tasks?status=todo&page=1&page_size=10" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+Поддерживаемые query-параметры:
+
+| Parameter | Описание |
+| --- | --- |
+| `status` | `todo`, `in_progress`, `done`, `blocked` |
+| `created_from` | дата в формате RFC3339 |
+| `created_to` | дата в формате RFC3339 |
+| `page` | номер страницы, начиная с `1` |
+| `page_size` | размер страницы, от `1` до `100` |
+
+### Обновление задачи
+
+`PUT /tasks/{id}` работает как частичное обновление: меняются только переданные поля.
+
+```bash
+curl -X PUT http://localhost:8080/tasks/<task_id> \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  -d '{
+    "progress_status": "in_progress"
+  }'
+```
+
+### Ротация refresh-токена
+
+```bash
+curl -X POST http://localhost:8080/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refresh_token": "<refresh_token>"
+  }'
+```
+
+## Бизнес-правила задач
+
+Статусы задач:
+
+- `todo`
+- `in_progress`
+- `blocked`
+- `done`
+
+Разрешенные переходы:
+
+| From | To |
+| --- | --- |
+| `todo` | `in_progress`, `blocked` |
+| `in_progress` | `todo`, `blocked`, `done` |
+| `blocked` | `todo`, `in_progress` |
+| `done` | нет переходов |
+
+Дополнительные правила:
+
+- `title` обязателен при создании задачи.
+- Если статус при создании не передан, используется `todo`.
+- Задачи сортируются по `created_at` от новых к старым.
+- Задачу со статусом `done` нельзя удалить.
+- История изменений доступна только владельцу задачи.
+
+## Конфигурация
+
+| Variable | Описание | Пример |
+| --- | --- | --- |
+| `ENVIRONMENT` | окружение: `development` или `production` | `development` |
+| `AUTH_SERVICE_ADDR` | адрес HTTP-сервера | `:8080` |
+| `JWT_SECRET` | секрет подписи JWT | `change_me` |
+| `ACCESS_TOKEN_TTL` | срок жизни access-токена | `30m` |
+| `REFRESH_TOKEN_TTL` | срок жизни refresh-токена | `48h` |
+| `MEMORY` | память Argon2id в мегабайтах | `64` |
+| `ITERATIONS` | количество итераций Argon2id | `3` |
+| `PARALLELISM` | параллелизм Argon2id | `2` |
+| `SALT_LENGTH` | длина соли в байтах | `16` |
+| `KEY_LENGTH` | длина хэша в байтах | `32` |
+| `MAX_CONCURRENCY` | лимит одновременных хэширований | `12` |
+| `RATE_LIMIT_MAX_REQUESTS` | максимум запросов в окно | `10` |
+| `RATE_LIMIT_WINDOW_SIZE` | размер окна rate limiter | `1m` |
+| `STORAGE_TYPE` | тип хранения: `memory` или `postgres` | `postgres` |
+| `POSTGRES_DSN` | DSN подключения к PostgreSQL | `postgres://...` |
+
+В `production` обязательные переменные должны быть заданы явно. В `development` часть значений имеет безопасные для локальной разработки defaults.
+
+## Хранение данных
+
+Проект поддерживает два режима хранения:
+
+- `memory` - пользователи, задачи, refresh-токены и audit log живут в памяти процесса.
+- `postgres` - пользователи и задачи хранятся в PostgreSQL, refresh-токены и audit log пока остаются in-memory.
+
+Это осознанное текущее ограничение проекта: PostgreSQL-репозитории для refresh-токенов и audit log можно добавить следующими шагами.
+
+## Безопасность
+
+В проекте реализованы следующие практики:
+
+- Пароли не хранятся в открытом виде.
+- Для паролей используется Argon2id.
+- Сравнение password hash выполняется через constant-time compare.
+- Access token подписывается через HMAC SHA-256.
+- Refresh token хранится как SHA-256 hash.
+- Refresh token rotation инвалидирует предыдущий refresh-токен.
+- SQL-запросы используют placeholders.
+- Публичные auth-эндпоинты защищены rate limiter.
+- Сервис не возвращает внутренние ошибки клиенту напрямую.
+
+Что стоит улучшить перед production:
+
+- Хранить refresh-токены и audit log в PostgreSQL.
+- Добавить HTTPS/TLS termination на уровне reverse proxy или сервера.
+- Добавить CORS/security headers при появлении frontend-клиента.
+- Добавить `golangci-lint`, `govulncheck` и CI.
+- Добавить unit и integration tests.
+
+## Проверка проекта
+
+```bash
+go test ./...
+go vet ./...
+```
+
+Дополнительно рекомендуется:
+
+```bash
+golangci-lint run ./...
+govulncheck ./...
+```
+
+## Текущий статус
+
+Реализовано:
+
+- регистрация и логин;
+- access JWT;
+- refresh-token rotation;
+- logout;
+- middleware авторизации;
+- CRUD задач;
+- фильтрация и пагинация задач;
+- история изменений задач;
+- memory и PostgreSQL репозитории для пользователей и задач;
+- SQL-миграции для пользователей и задач.
+
+В планах:
+
+- PostgreSQL-хранилище для refresh-токенов;
+- PostgreSQL-хранилище для audit log;
+- автоматические тесты;
+- GitHub Actions;
+- OpenAPI-спецификация.
 
